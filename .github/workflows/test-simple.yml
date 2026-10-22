@@ -1,0 +1,17 @@
+name: Simple Test
+
+on:
+  push:
+    branches: [cursor/plausible-client-v01-58e4]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test
+        run: echo "Hello World"
