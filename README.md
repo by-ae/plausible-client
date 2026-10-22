@@ -60,11 +60,13 @@ for row in result.results:
 import asyncio
 from plausible_client import AsyncClient, QueryBuilder, Metric
 
+
 async def get_stats():
     async with AsyncClient(api_key="your-api-key") as client:
         query = QueryBuilder("example.com").metrics(Metric.VISITORS)
         result = await client.query(query)
         return result
+
 
 stats = asyncio.run(get_stats())
 ```
@@ -93,7 +95,7 @@ client.send_event(
     props={
         "plan": "premium",
         "trial": True,
-    }
+    },
 )
 
 # Send an event with revenue
@@ -105,7 +107,7 @@ client.send_event(
     revenue={
         "amount": 99.99,
         "currency": "USD",
-    }
+    },
 )
 ```
 
@@ -152,13 +154,13 @@ query = (
 ```python
 from plausible_client import Metric
 
-Metric.VISITORS         # Unique visitors
-Metric.VISITS           # Total visits
-Metric.PAGEVIEWS        # Total pageviews
+Metric.VISITORS  # Unique visitors
+Metric.VISITS  # Total visits
+Metric.PAGEVIEWS  # Total pageviews
 Metric.VIEWS_PER_VISIT  # Average pageviews per visit
-Metric.BOUNCE_RATE      # Bounce rate percentage
-Metric.VISIT_DURATION   # Average visit duration
-Metric.EVENTS           # Total custom events
+Metric.BOUNCE_RATE  # Bounce rate percentage
+Metric.VISIT_DURATION  # Average visit duration
+Metric.EVENTS  # Total custom events
 Metric.CONVERSION_RATE  # Goal conversion rate
 ```
 

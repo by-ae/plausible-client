@@ -72,7 +72,9 @@ class Client:
             f"{self.base_url}/api/v2/query",
             json=payload,
         )
-        return self._handle_response(response, QueryResult)
+        result = self._handle_response(response, QueryResult)
+        assert result is not None
+        return result
 
     def send_event(
         self,
@@ -149,7 +151,7 @@ class Client:
             except Exception as e:
                 if isinstance(e, InvalidQueryError):
                     raise
-                raise InvalidQueryError("Invalid query")
+                raise InvalidQueryError("Invalid query") from None
 
         if response.status_code >= 500:
             raise ServerError(

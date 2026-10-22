@@ -12,7 +12,7 @@ class DateRange:
     start_date: date
     end_date: date
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, list[str]]:
         """Convert to API format."""
         return {
             "date_range": [

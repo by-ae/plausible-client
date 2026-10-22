@@ -45,9 +45,7 @@ class QueryBuilder:
         self._date_range = date_range_obj.to_dict()
         return self
 
-    def order_by(
-        self, metric: str, direction: Literal["asc", "desc"] = "desc"
-    ) -> "QueryBuilder":
+    def order_by(self, metric: str, direction: Literal["asc", "desc"] = "desc") -> "QueryBuilder":
         """Add ordering to the query."""
         order_obj = OrderBy(metric=metric, direction=direction)
         self._order_by.append(order_obj.to_dict())

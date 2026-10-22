@@ -131,9 +131,7 @@ def test_client_rate_limit_error() -> None:
 @respx.mock
 def test_client_server_error() -> None:
     """Test server error handling."""
-    respx.post("https://plausible.io/api/v2/query").mock(
-        return_value=httpx.Response(503)
-    )
+    respx.post("https://plausible.io/api/v2/query").mock(return_value=httpx.Response(503))
 
     client = Client(api_key="test-key")
     query = QueryBuilder("example.com").metrics(Metric.VISITORS)
@@ -165,9 +163,7 @@ def test_client_retry_on_500() -> None:
 @respx.mock
 def test_send_event_pageview() -> None:
     """Test sending a pageview event."""
-    route = respx.post("https://plausible.io/api/event").mock(
-        return_value=httpx.Response(202)
-    )
+    route = respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202))
 
     client = Client(api_key="test-key")
     client.send_event(
@@ -187,9 +183,7 @@ def test_send_event_pageview() -> None:
 @respx.mock
 def test_send_event_custom_with_props() -> None:
     """Test sending a custom event with properties."""
-    route = respx.post("https://plausible.io/api/event").mock(
-        return_value=httpx.Response(202)
-    )
+    route = respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202))
 
     client = Client(api_key="test-key")
     client.send_event(

@@ -2,7 +2,8 @@
 
 import asyncio
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import httpx
 
@@ -23,7 +24,7 @@ def get_retry_after(response: httpx.Response, attempt: int) -> float:
             return float(response.headers["Retry-After"])
         except ValueError:
             pass
-    return min(2**attempt, 60)
+    return float(min(2**attempt, 60))
 
 
 def retry_sync(
@@ -71,7 +72,7 @@ def retry_sync(
 
 async def retry_async(
     func: Callable[..., Any], *args: Any, max_retries: int = 3, **kwargs: Any
-) -> httpx.Response:
+) -> Any:
     """Execute an async function with retry logic."""
     last_exception: Exception | None = None
 

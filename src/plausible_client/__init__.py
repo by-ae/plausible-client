@@ -1,23 +1,23 @@
 """A clean, typed Python client for Plausible Analytics HTTP APIs."""
 
-from plausible_client.client import Client
 from plausible_client.async_client import AsyncClient
+from plausible_client.client import Client
 from plausible_client.errors import (
-    PlausibleError,
     AuthenticationError,
-    RateLimitError,
     InvalidQueryError,
+    PlausibleError,
+    RateLimitError,
     ServerError,
 )
-from plausible_client.query import QueryBuilder
 from plausible_client.models import (
-    QueryResult,
-    Metric,
+    DateRange,
     Dimension,
     Filter,
-    DateRange,
+    Metric,
     OrderBy,
+    QueryResult,
 )
+from plausible_client.query import QueryBuilder
 
 __version__ = "0.1.0"
 

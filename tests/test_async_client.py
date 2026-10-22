@@ -1,7 +1,5 @@
 """Tests for the asynchronous Plausible client."""
 
-from datetime import date
-
 import httpx
 import pytest
 import respx
@@ -10,11 +8,9 @@ from plausible_client import (
     AsyncClient,
     AuthenticationError,
     Dimension,
-    InvalidQueryError,
     Metric,
     QueryBuilder,
     RateLimitError,
-    ServerError,
 )
 
 
@@ -137,9 +133,7 @@ async def test_async_client_retry_on_429() -> None:
 @respx.mock
 async def test_async_send_event_pageview() -> None:
     """Test async sending a pageview event."""
-    route = respx.post("https://plausible.io/api/event").mock(
-        return_value=httpx.Response(202)
-    )
+    route = respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202))
 
     client = AsyncClient(api_key="test-key")
     await client.send_event(
@@ -161,9 +155,7 @@ async def test_async_send_event_pageview() -> None:
 @respx.mock
 async def test_async_send_event_custom_with_revenue() -> None:
     """Test async sending a custom event with revenue."""
-    route = respx.post("https://plausible.io/api/event").mock(
-        return_value=httpx.Response(202)
-    )
+    route = respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202))
 
     client = AsyncClient(api_key="test-key")
     await client.send_event(
