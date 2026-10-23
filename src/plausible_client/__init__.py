@@ -13,9 +13,15 @@ from plausible_client.models import (
     DateRange,
     Dimension,
     Filter,
+    Goal,
+    Guest,
     Metric,
     OrderBy,
     QueryResult,
+    SharedLink,
+    Site,
+    Team,
+    TrackerScriptConfiguration,
 )
 from plausible_client.query import QueryBuilder
 
@@ -36,4 +42,10 @@ __all__ = [
     "Filter",
     "DateRange",
     "OrderBy",
+    "Site",
+    "Team",
+    "Goal",
+    "SharedLink",
+    "Guest",
+    "TrackerScriptConfiguration",
 ]
