@@ -26,13 +26,28 @@ class DateRange:
 class Filter:
     """Filter for queries."""
 
+    operator: Literal[
+        "is",
+        "is_not",
+        "contains",
+        "contains_not",
+        "matches",
+        "matches_not",
+        "does_not_contain",
+    ]
     dimension: str
-    operator: Literal["is", "is_not", "contains", "does_not_contain"]
-    value: str | list[str]
+    clauses: list[str]
 
     def to_dict(self) -> list[str | list[str]]:
-        """Convert to API format."""
-        return [self.dimension, self.operator, self.value]
+        """
+        Convert to API format: [operator, dimension, clauses].
+        
+        Maps deprecated 'does_not_contain' to 'contains_not' for API compatibility.
+        """
+        operator = self.operator
+        if operator == "does_not_contain":
+            operator = "contains_not"
+        return [operator, self.dimension, self.clauses]
 
 
 @dataclass
@@ -42,9 +57,9 @@ class OrderBy:
     metric: str
     direction: Literal["asc", "desc"] = "desc"
 
-    def to_dict(self) -> dict[str, str]:
-        """Convert to API format."""
-        return {"metric": self.metric, "direction": self.direction}
+    def to_list(self) -> list[str]:
+        """Convert to API format: [metric, direction]."""
+        return [self.metric, self.direction]
 
 
 class Metric:

@@ -86,38 +86,51 @@ class Client:
 
         Args:
             query_builder: QueryBuilder instance with the query configuration
-            page_size: Number of results per page (default 1000, max 10000)
+            page_size: Number of results per page (1 to 10000, default 1000)
 
         Returns:
             QueryResult with all results combined
 
         Raises:
+            ValueError: If page_size is not between 1 and 10000
             AuthenticationError: If authentication fails
             InvalidQueryError: If the query is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
         """
+        if not 1 <= page_size <= 10000:
+            raise ValueError(f"page_size must be between 1 and 10000, got {page_size}")
+
         all_results: list[dict[str, Any]] = []
         offset = 0
         combined_meta: dict[str, Any] = {}
 
         while True:
-            page_query = QueryBuilder(query_builder.site_id)
-            page_query._metrics = query_builder._metrics.copy()
-            page_query._dimensions = query_builder._dimensions.copy()
-            page_query._filters = query_builder._filters.copy()
-            page_query._date_range = query_builder._date_range
-            page_query._order_by = query_builder._order_by.copy()
-            page_query._include = query_builder._include.copy()
-            page_query._include["total_rows"] = True
+            page_query = query_builder.copy()
             page_query._limit = page_size
             page_query._offset = offset
+            page_query._include["total_rows"] = True
 
             result = self.query(page_query)
+
+            if not result.results:
+                break
+
             all_results.extend(result.results)
 
             if not combined_meta:
                 combined_meta = result.meta.copy()
+            else:
+                combined_meta.update(result.meta)
+
+            total_rows = result.meta.get("total_rows")
+            if total_rows is None or offset + page_size >= total_rows:
+                break
+
+            offset += page_size
+
+        combined_meta["total_rows"] = len(all_results)
+        return QueryResult(results=all_results, meta=combined_meta)
             else:
                 combined_meta.update(result.meta)
 
