@@ -17,6 +17,7 @@ class QueryBuilder:
         self._order_by: list[dict[str, str]] = []
         self._limit: int | None = None
         self._offset: int | None = None
+        self._include: dict[str, Any] = {}
 
     def metrics(self, *metrics: str) -> "QueryBuilder":
         """Add metrics to the query."""
@@ -61,6 +62,28 @@ class QueryBuilder:
         self._offset = offset
         return self
 
+    def include(
+        self,
+        imports: bool = False,
+        time_labels: bool = False,
+        total_rows: bool = False,
+    ) -> "QueryBuilder":
+        """
+        Set include options for additional data.
+
+        Args:
+            imports: Try to include imported data in the result
+            time_labels: Include all time labels valid for the date range (requires time dimension)
+            total_rows: Include total row count for pagination
+        """
+        if imports:
+            self._include["imports"] = True
+        if time_labels:
+            self._include["time_labels"] = True
+        if total_rows:
+            self._include["total_rows"] = True
+        return self
+
     def build(self) -> dict[str, Any]:
         """Build the query payload."""
         payload: dict[str, Any] = {"site_id": self.site_id}
@@ -85,5 +108,8 @@ class QueryBuilder:
 
         if self._offset is not None:
             payload["offset"] = self._offset
+
+        if self._include:
+            payload["include"] = self._include
 
         return payload
