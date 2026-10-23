@@ -3,7 +3,6 @@
 from datetime import date
 
 import httpx
-import pytest
 import respx
 from respx import MockRouter
 
@@ -292,7 +291,7 @@ def test_query_builder_include_partial(respx_mock: MockRouter) -> None:
         .include(total_rows=True)
     )
 
-    result = client.query(query)
+    client.query(query)
 
     request = respx_mock.calls.last.request
     import json

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Automatic pagination with `query_all()` method for Stats API queries
+- `include()` method on `QueryBuilder` for imports, time_labels, and total_rows options
+- Support for fetching all results across multiple pages automatically
 - Full Sites API (v1) support for programmatic site management
 - Site operations: list, get, create, update, delete sites
 - Team management: list accessible teams and check API availability
