@@ -131,7 +131,7 @@ new_site = client.create_site(
     tracker_script_configuration={
         "file_downloads": True,
         "outbound_links": True,
-    }
+    },
 )
 
 # Get site details
@@ -153,7 +153,7 @@ goals, meta = client.list_goals("example.com")
 guest = client.invite_guest(
     site_id="example.com",
     email="viewer@example.com",
-    role="viewer"  # or "editor"
+    role="viewer",  # or "editor"
 )
 
 # Create a shared dashboard link
