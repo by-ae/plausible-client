@@ -14,9 +14,9 @@ class QueryBuilder:
         self._dimensions: list[str] = []
         self._filters: list[list[str | list[str]]] = []
         self._date_range: dict[str, Any] | None = None
-        self._order_by: list[dict[str, str]] = []
-        self._limit: int | None = None
-        self._offset: int | None = None
+        self._order_by: list[list[str]] = []
+        self._limit: int = 10000
+        self._offset: int = 0
         self._include: dict[str, Any] = {}
 
     def metrics(self, *metrics: str) -> "QueryBuilder":
@@ -32,11 +32,27 @@ class QueryBuilder:
     def filter(
         self,
         dimension: str,
-        operator: Literal["is", "is_not", "contains", "does_not_contain"],
+        operator: Literal[
+            "is",
+            "is_not",
+            "contains",
+            "contains_not",
+            "matches",
+            "matches_not",
+            "does_not_contain",
+        ],
         value: str | list[str],
     ) -> "QueryBuilder":
-        """Add a filter to the query."""
-        filter_obj = Filter(dimension=dimension, operator=operator, value=value)
+        """
+        Add a filter to the query.
+
+        Args:
+            dimension: The dimension to filter on
+            operator: Filter operator (does_not_contain is deprecated, use contains_not)
+            value: Single value or list of values to filter by
+        """
+        clauses = [value] if isinstance(value, str) else value
+        filter_obj = Filter(operator=operator, dimension=dimension, clauses=clauses)
         self._filters.append(filter_obj.to_dict())
         return self
 
@@ -49,7 +65,7 @@ class QueryBuilder:
     def order_by(self, metric: str, direction: Literal["asc", "desc"] = "desc") -> "QueryBuilder":
         """Add ordering to the query."""
         order_obj = OrderBy(metric=metric, direction=direction)
-        self._order_by.append(order_obj.to_dict())
+        self._order_by.append(order_obj.to_list())
         return self
 
     def limit(self, limit: int) -> "QueryBuilder":
@@ -84,6 +100,19 @@ class QueryBuilder:
             self._include["total_rows"] = True
         return self
 
+    def copy(self) -> "QueryBuilder":
+        """Create a copy of this QueryBuilder."""
+        new_qb = QueryBuilder(self.site_id)
+        new_qb._metrics = self._metrics.copy()
+        new_qb._dimensions = self._dimensions.copy()
+        new_qb._filters = self._filters.copy()
+        new_qb._date_range = self._date_range
+        new_qb._order_by = self._order_by.copy()
+        new_qb._limit = self._limit
+        new_qb._offset = self._offset
+        new_qb._include = self._include.copy()
+        return new_qb
+
     def build(self) -> dict[str, Any]:
         """Build the query payload."""
         payload: dict[str, Any] = {"site_id": self.site_id}
@@ -103,11 +132,8 @@ class QueryBuilder:
         if self._order_by:
             payload["order_by"] = self._order_by
 
-        if self._limit is not None:
-            payload["limit"] = self._limit
-
-        if self._offset is not None:
-            payload["offset"] = self._offset
+        if self._limit != 10000 or self._offset != 0:
+            payload["pagination"] = {"limit": self._limit, "offset": self._offset}
 
         if self._include:
             payload["include"] = self._include
