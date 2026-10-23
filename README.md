@@ -13,6 +13,7 @@ A clean, typed Python client for [Plausible Analytics](https://plausible.io/) HT
 - 🚀 **Both sync and async** clients built on httpx
 - 📊 **Stats API v2** support with typed query builder
 - 📈 **Events API** for sending pageviews and custom events
+- 🏗️ **Sites API** for programmatic site and goal management
 - 🔄 **Automatic retry** with exponential backoff on rate limits and server errors
 - 🏢 **Self-hosted** Plausible instance support
 - ✨ **Clean API** with builder pattern for queries
@@ -109,6 +110,55 @@ client.send_event(
         "currency": "USD",
     },
 )
+```
+
+### Sites API - Managing Sites Programmatically
+
+```python
+from plausible_client import Client
+
+client = Client(api_key="your-sites-api-key")
+
+# List all accessible sites
+sites, meta = client.list_sites()
+for site in sites:
+    print(f"{site.domain} ({site.timezone})")
+
+# Create a new site
+new_site = client.create_site(
+    domain="newsite.com",
+    timezone="America/New_York",
+    tracker_script_configuration={
+        "file_downloads": True,
+        "outbound_links": True,
+    }
+)
+
+# Get site details
+site = client.get_site("example.com")
+print(f"Custom properties: {site.custom_properties}")
+
+# Create a goal
+goal = client.create_goal(
+    site_id="example.com",
+    goal_type="event",
+    event_name="signup",
+    display_name="User Signup",
+)
+
+# List goals
+goals, meta = client.list_goals("example.com")
+
+# Invite a guest
+guest = client.invite_guest(
+    site_id="example.com",
+    email="viewer@example.com",
+    role="viewer"  # or "editor"
+)
+
+# Create a shared dashboard link
+link = client.create_shared_link("example.com", "Public Dashboard")
+print(f"Share at: {link.url}")
 ```
 
 ## Advanced Usage
