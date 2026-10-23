@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic pagination with `query_all()` method for Stats API queries
 - `include()` method on `QueryBuilder` for imports, time_labels, and total_rows options
 - Support for fetching all results across multiple pages automatically
+- `QueryBuilder.copy()` helper method for creating independent query copies
+- Support for `contains_not`, `matches`, and `matches_not` filter operators
 - Full Sites API (v1) support for programmatic site management
 - Site operations: list, get, create, update, delete sites
 - Team management: list accessible teams and check API availability
@@ -21,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guest management: invite, list, and remove site guests and invitations
 - New typed models: `Site`, `Team`, `Goal`, `SharedLink`, `Guest`, and `TrackerScriptConfiguration`
 - All Sites API methods available in both `Client` and `AsyncClient`
+
+### Fixed
+
+- Stats API v2 payload format now matches API specification at https://plausible.io/docs/stats-api
+- Pagination sent as nested `{"pagination": {"limit": N, "offset": M}}` object (was top-level keys)
+- `order_by` sent as list of `[metric, direction]` pairs (was list of dict objects)
+- Filters sent as `[operator, dimension, clauses]` with clauses always a list (was `[dimension, operator, value]`)
+- Default pagination values (limit: 10000, offset: 0) now match API defaults
+- `query_all()` validates page_size is between 1 and 10000 (raises ValueError otherwise)
+- `query_all()` guards against infinite loops by breaking on empty result pages
+- Deprecated `does_not_contain` operator now correctly maps to `contains_not`
 
 ## [0.1.0] - 2026-10-22
 

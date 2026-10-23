@@ -41,7 +41,7 @@ class Filter:
     def to_dict(self) -> list[str | list[str]]:
         """
         Convert to API format: [operator, dimension, clauses].
-        
+
         Maps deprecated 'does_not_contain' to 'contains_not' for API compatibility.
         """
         operator = self.operator

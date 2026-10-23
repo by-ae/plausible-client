@@ -131,17 +131,6 @@ class Client:
 
         combined_meta["total_rows"] = len(all_results)
         return QueryResult(results=all_results, meta=combined_meta)
-            else:
-                combined_meta.update(result.meta)
-
-            total_rows = result.meta.get("total_rows")
-            if total_rows is None or offset + page_size >= total_rows:
-                break
-
-            offset += page_size
-
-        combined_meta["total_rows"] = len(all_results)
-        return QueryResult(results=all_results, meta=combined_meta)
 
     def send_event(
         self,
