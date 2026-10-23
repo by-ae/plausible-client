@@ -76,6 +76,60 @@ class AsyncClient:
         assert result is not None
         return result
 
+    async def query_all(self, query_builder: QueryBuilder, page_size: int = 1000) -> QueryResult:
+        """
+        Execute a Stats API v2 query and automatically fetch all pages.
+
+        This method handles pagination automatically by making multiple requests
+        until all results are retrieved. The QueryBuilder's limit/offset settings
+        are overridden.
+
+        Args:
+            query_builder: QueryBuilder instance with the query configuration
+            page_size: Number of results per page (default 1000, max 10000)
+
+        Returns:
+            QueryResult with all results combined
+
+        Raises:
+            AuthenticationError: If authentication fails
+            InvalidQueryError: If the query is invalid
+            RateLimitError: If rate limit is exceeded
+            ServerError: If server returns 5xx error
+        """
+        all_results: list[dict[str, Any]] = []
+        offset = 0
+        combined_meta: dict[str, Any] = {}
+
+        while True:
+            page_query = QueryBuilder(query_builder.site_id)
+            page_query._metrics = query_builder._metrics.copy()
+            page_query._dimensions = query_builder._dimensions.copy()
+            page_query._filters = query_builder._filters.copy()
+            page_query._date_range = query_builder._date_range
+            page_query._order_by = query_builder._order_by.copy()
+            page_query._include = query_builder._include.copy()
+            page_query._include["total_rows"] = True
+            page_query._limit = page_size
+            page_query._offset = offset
+
+            result = await self.query(page_query)
+            all_results.extend(result.results)
+
+            if not combined_meta:
+                combined_meta = result.meta.copy()
+            else:
+                combined_meta.update(result.meta)
+
+            total_rows = result.meta.get("total_rows")
+            if total_rows is None or offset + page_size >= total_rows:
+                break
+
+            offset += page_size
+
+        combined_meta["total_rows"] = len(all_results)
+        return QueryResult(results=all_results, meta=combined_meta)
+
     async def send_event(
         self,
         domain: str,

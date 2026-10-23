@@ -196,7 +196,54 @@ query = (
     # Pagination
     .limit(50)
     .offset(0)
+    # Include options
+    .include(imports=True, time_labels=True, total_rows=True)
 )
+```
+
+### Automatic Pagination
+
+For queries with many results, use `query_all()` to automatically fetch all pages:
+
+```python
+from plausible_client import Client, QueryBuilder, Metric, Dimension
+from datetime import date, timedelta
+
+client = Client(api_key="your-api-key")
+
+# Build query for pages by source
+today = date.today()
+last_month = today - timedelta(days=30)
+
+query = (
+    QueryBuilder("example.com")
+    .metrics(Metric.VISITORS, Metric.PAGEVIEWS)
+    .dimensions(Dimension.EVENT_PAGE, Dimension.VISIT_SOURCE)
+    .date_range(last_month, today)
+    .order_by(Metric.VISITORS, "desc")
+)
+
+# Fetch all results automatically (handles pagination internally)
+result = client.query_all(query, page_size=1000)
+
+print(f"Total rows: {result.meta['total_rows']}")
+for row in result.results:
+    print(
+        f"Page: {row['dimensions'][0]}, Source: {row['dimensions'][1]}, "
+        f"Visitors: {row['metrics'][0]}, Pageviews: {row['metrics'][1]}"
+    )
+```
+
+The `query_all()` method:
+- Automatically makes multiple requests to fetch all results
+- Combines results from all pages into a single QueryResult
+- Defaults to 1000 results per page (configurable up to 10000)
+- Works with both `Client` and `AsyncClient`
+
+```python
+# Async version
+async with AsyncClient(api_key="your-api-key") as client:
+    result = await client.query_all(query, page_size=1000)
 ```
 
 ### Available Metrics
