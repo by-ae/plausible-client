@@ -3,6 +3,7 @@
 from datetime import date
 
 import httpx
+import pytest
 import respx
 from respx import MockRouter
 
@@ -29,10 +30,8 @@ def test_query_all_single_page(respx_mock: MockRouter) -> None:
         )
     )
 
-    query = (
-        QueryBuilder("example.com")
-        .metrics(Metric.VISITORS)
-        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+        date(2024, 1, 1), date(2024, 1, 31)
     )
 
     result = client.query_all(query, page_size=1000)
@@ -76,10 +75,8 @@ def test_query_all_multiple_pages(respx_mock: MockRouter) -> None:
 
     respx_mock.post("https://plausible.io/api/v2/query").mock(side_effect=mock_response)
 
-    query = (
-        QueryBuilder("example.com")
-        .metrics(Metric.VISITORS)
-        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+        date(2024, 1, 1), date(2024, 1, 31)
     )
 
     result = client.query_all(query, page_size=100)
@@ -91,36 +88,48 @@ def test_query_all_multiple_pages(respx_mock: MockRouter) -> None:
 
 
 @respx.mock
-def test_query_all_custom_page_size(respx_mock: MockRouter) -> None:
-    """Test query_all with a custom page size."""
+def test_query_all_empty_results(respx_mock: MockRouter) -> None:
+    """Test query_all handles empty results gracefully."""
     client = Client(api_key="test-key")
-
-    results = [{"dimensions": [f"Page{i}"], "metrics": [10]} for i in range(5)]
 
     respx_mock.post("https://plausible.io/api/v2/query").mock(
         return_value=httpx.Response(
             200,
             json={
-                "results": results,
-                "meta": {"total_rows": 5},
+                "results": [],
+                "meta": {"total_rows": 0},
             },
         )
     )
 
-    query = (
-        QueryBuilder("example.com")
-        .metrics(Metric.PAGEVIEWS)
-        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+        date(2024, 1, 1), date(2024, 1, 31)
     )
 
-    result = client.query_all(query, page_size=50)
+    result = client.query_all(query)
 
-    assert len(result.results) == 5
-    request = respx_mock.calls.last.request
-    import json
+    assert len(result.results) == 0
+    assert result.meta["total_rows"] == 0
+    assert len(respx_mock.calls) == 1
 
-    body = json.loads(request.content)
-    assert body["limit"] == 50
+
+@respx.mock
+def test_query_all_invalid_page_size(respx_mock: MockRouter) -> None:
+    """Test query_all validates page_size."""
+    client = Client(api_key="test-key")
+
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+        date(2024, 1, 1), date(2024, 1, 31)
+    )
+
+    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+        client.query_all(query, page_size=0)
+
+    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+        client.query_all(query, page_size=10001)
+
+    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+        client.query_all(query, page_size=-5)
 
 
 @respx.mock
@@ -156,7 +165,8 @@ def test_query_all_preserves_query_options(respx_mock: MockRouter) -> None:
     body = json.loads(request.content)
     assert body["metrics"] == ["visitors", "pageviews"]
     assert body["dimensions"] == ["visit:country"]
-    assert body["filters"] == [["visit:source", "is", "Google"]]
+    assert body["filters"] == [["is", "visit:source", ["Google"]]]
+    assert body["order_by"] == [["visitors", "desc"]]
     assert "include" in body
     assert body["include"]["total_rows"] is True
 
@@ -180,10 +190,8 @@ async def test_async_query_all_single_page(respx_mock: MockRouter) -> None:
             )
         )
 
-        query = (
-            QueryBuilder("example.com")
-            .metrics(Metric.VISITORS)
-            .date_range(date(2024, 1, 1), date(2024, 1, 31))
+        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+            date(2024, 1, 1), date(2024, 1, 31)
         )
 
         result = await client.query_all(query, page_size=1000)
@@ -198,7 +206,9 @@ async def test_async_query_all_multiple_pages(respx_mock: MockRouter) -> None:
     """Test async query_all with results spanning multiple pages."""
     async with AsyncClient(api_key="test-key") as client:
         page1_results = [{"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50)]
-        page2_results = [{"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50, 75)]
+        page2_results = [
+            {"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50, 75)
+        ]
 
         call_count = 0
 
@@ -225,10 +235,8 @@ async def test_async_query_all_multiple_pages(respx_mock: MockRouter) -> None:
 
         respx_mock.post("https://plausible.io/api/v2/query").mock(side_effect=mock_response)
 
-        query = (
-            QueryBuilder("example.com")
-            .metrics(Metric.VISITORS)
-            .date_range(date(2024, 1, 1), date(2024, 1, 31))
+        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
+            date(2024, 1, 1), date(2024, 1, 31)
         )
 
         result = await client.query_all(query, page_size=50)
@@ -278,25 +286,48 @@ def test_query_builder_include_options(respx_mock: MockRouter) -> None:
 
 
 @respx.mock
-def test_query_builder_include_partial(respx_mock: MockRouter) -> None:
-    """Test QueryBuilder include with only some options enabled."""
+def test_query_builder_copy(respx_mock: MockRouter) -> None:
+    """Test QueryBuilder.copy() creates independent copy."""
+    original = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .dimensions("visit:country")
+        .filter("visit:source", "is", "Google")
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+        .order_by(Metric.VISITORS, "desc")
+        .limit(50)
+        .offset(10)
+        .include(total_rows=True)
+    )
+
+    copy = original.copy()
+
+    copy._limit = 100
+    copy._offset = 20
+    copy._metrics.append("pageviews")
+
+    assert original._limit == 50
+    assert original._offset == 10
+    assert len(original._metrics) == 1
+
+
+@respx.mock
+def test_filter_operator_mapping(respx_mock: MockRouter) -> None:
+    """Test that does_not_contain is mapped to contains_not."""
     client = Client(api_key="test-key")
 
     respx_mock.post("https://plausible.io/api/v2/query").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "results": [],
-                "meta": {"total_rows": 0},
-            },
+            json={"results": [], "meta": {}},
         )
     )
 
     query = (
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
-        .date_range(date(2024, 1, 1), date(2024, 1, 2))
-        .include(total_rows=True)
+        .filter("event:page", "does_not_contain", "admin")
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
     )
 
     client.query(query)
@@ -305,6 +336,64 @@ def test_query_builder_include_partial(respx_mock: MockRouter) -> None:
     import json
 
     body = json.loads(request.content)
-    assert body["include"]["total_rows"] is True
-    assert "imports" not in body["include"]
-    assert "time_labels" not in body["include"]
+    assert body["filters"][0][0] == "contains_not"
+
+
+@respx.mock
+def test_pagination_format(respx_mock: MockRouter) -> None:
+    """Test that pagination is sent as nested object."""
+    client = Client(api_key="test-key")
+
+    respx_mock.post("https://plausible.io/api/v2/query").mock(
+        return_value=httpx.Response(
+            200,
+            json={"results": [], "meta": {}},
+        )
+    )
+
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+        .limit(50)
+        .offset(100)
+    )
+
+    client.query(query)
+
+    request = respx_mock.calls.last.request
+    import json
+
+    body = json.loads(request.content)
+    assert "pagination" in body
+    assert body["pagination"]["limit"] == 50
+    assert body["pagination"]["offset"] == 100
+    assert "limit" not in body
+    assert "offset" not in body
+
+
+@respx.mock
+def test_default_pagination_omitted(respx_mock: MockRouter) -> None:
+    """Test that default pagination values are omitted."""
+    client = Client(api_key="test-key")
+
+    respx_mock.post("https://plausible.io/api/v2/query").mock(
+        return_value=httpx.Response(
+            200,
+            json={"results": [], "meta": {}},
+        )
+    )
+
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
+    )
+
+    client.query(query)
+
+    request = respx_mock.calls.last.request
+    import json
+
+    body = json.loads(request.content)
+    assert "pagination" not in body

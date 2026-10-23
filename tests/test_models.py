@@ -15,34 +15,34 @@ def test_date_range_to_dict() -> None:
 
 def test_filter_to_dict_single_value() -> None:
     """Test Filter conversion with single value."""
-    f = Filter(dimension="event:page", operator="is", value="/home")
+    f = Filter(operator="is", dimension="event:page", clauses=["/home"])
     result = f.to_dict()
 
-    assert result == ["event:page", "is", "/home"]
+    assert result == ["is", "event:page", ["/home"]]
 
 
 def test_filter_to_dict_list_value() -> None:
     """Test Filter conversion with list value."""
-    f = Filter(dimension="visit:country", operator="is", value=["US", "UK"])
+    f = Filter(operator="is", dimension="visit:country", clauses=["US", "UK"])
     result = f.to_dict()
 
-    assert result == ["visit:country", "is", ["US", "UK"]]
+    assert result == ["is", "visit:country", ["US", "UK"]]
 
 
 def test_order_by_to_dict() -> None:
-    """Test OrderBy conversion to dict."""
+    """Test OrderBy conversion to list."""
     ob = OrderBy(metric="visitors", direction="desc")
-    result = ob.to_dict()
+    result = ob.to_list()
 
-    assert result == {"metric": "visitors", "direction": "desc"}
+    assert result == ["visitors", "desc"]
 
 
 def test_order_by_default_direction() -> None:
     """Test OrderBy with default direction."""
     ob = OrderBy(metric="pageviews")
-    result = ob.to_dict()
+    result = ob.to_list()
 
-    assert result["direction"] == "desc"
+    assert result[1] == "desc"
 
 
 def test_query_result_from_response() -> None:

@@ -51,7 +51,7 @@ def test_query_builder_with_filter() -> None:
     payload = query.build()
 
     assert len(payload["filters"]) == 1
-    assert payload["filters"][0] == [Dimension.VISIT_SOURCE, "is", "Google"]
+    assert payload["filters"][0] == ["is", Dimension.VISIT_SOURCE, ["Google"]]
 
 
 def test_query_builder_with_multiple_filters() -> None:
@@ -106,8 +106,7 @@ def test_query_builder_with_order_by() -> None:
     payload = query.build()
 
     assert len(payload["order_by"]) == 1
-    assert payload["order_by"][0]["metric"] == Metric.VISITORS
-    assert payload["order_by"][0]["direction"] == "desc"
+    assert payload["order_by"][0] == [Metric.VISITORS, "desc"]
 
 
 def test_query_builder_with_pagination() -> None:
@@ -116,8 +115,9 @@ def test_query_builder_with_pagination() -> None:
 
     payload = query.build()
 
-    assert payload["limit"] == 10
-    assert payload["offset"] == 20
+    assert "pagination" in payload
+    assert payload["pagination"]["limit"] == 10
+    assert payload["pagination"]["offset"] == 20
 
 
 def test_query_builder_full_example() -> None:
@@ -140,4 +140,4 @@ def test_query_builder_full_example() -> None:
     assert len(payload["filters"]) == 1
     assert "date_range" in payload
     assert len(payload["order_by"]) == 1
-    assert payload["limit"] == 50
+    assert payload["pagination"]["limit"] == 50
