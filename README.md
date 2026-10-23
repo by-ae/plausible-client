@@ -228,8 +228,10 @@ result = client.query_all(query, page_size=1000)
 
 print(f"Total rows: {result.meta['total_rows']}")
 for row in result.results:
-    print(f"Page: {row['dimensions'][0]}, Source: {row['dimensions'][1]}, "
-          f"Visitors: {row['metrics'][0]}, Pageviews: {row['metrics'][1]}")
+    print(
+        f"Page: {row['dimensions'][0]}, Source: {row['dimensions'][1]}, "
+        f"Visitors: {row['metrics'][0]}, Pageviews: {row['metrics'][1]}"
+    )
 ```
 
 The `query_all()` method:

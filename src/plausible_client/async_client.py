@@ -76,9 +76,7 @@ class AsyncClient:
         assert result is not None
         return result
 
-    async def query_all(
-        self, query_builder: QueryBuilder, page_size: int = 1000
-    ) -> QueryResult:
+    async def query_all(self, query_builder: QueryBuilder, page_size: int = 1000) -> QueryResult:
         """
         Execute a Stats API v2 query and automatically fetch all pages.
 

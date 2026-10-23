@@ -29,8 +29,10 @@ def test_query_all_single_page(respx_mock: MockRouter) -> None:
         )
     )
 
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
-        date(2024, 1, 1), date(2024, 1, 31)
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
     )
 
     result = client.query_all(query, page_size=1000)
@@ -74,8 +76,10 @@ def test_query_all_multiple_pages(respx_mock: MockRouter) -> None:
 
     respx_mock.post("https://plausible.io/api/v2/query").mock(side_effect=mock_response)
 
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
-        date(2024, 1, 1), date(2024, 1, 31)
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
     )
 
     result = client.query_all(query, page_size=100)
@@ -103,8 +107,10 @@ def test_query_all_custom_page_size(respx_mock: MockRouter) -> None:
         )
     )
 
-    query = QueryBuilder("example.com").metrics(Metric.PAGEVIEWS).date_range(
-        date(2024, 1, 1), date(2024, 1, 31)
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.PAGEVIEWS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 31))
     )
 
     result = client.query_all(query, page_size=50)
@@ -174,8 +180,10 @@ async def test_async_query_all_single_page(respx_mock: MockRouter) -> None:
             )
         )
 
-        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
-            date(2024, 1, 1), date(2024, 1, 31)
+        query = (
+            QueryBuilder("example.com")
+            .metrics(Metric.VISITORS)
+            .date_range(date(2024, 1, 1), date(2024, 1, 31))
         )
 
         result = await client.query_all(query, page_size=1000)
@@ -190,9 +198,7 @@ async def test_async_query_all_multiple_pages(respx_mock: MockRouter) -> None:
     """Test async query_all with results spanning multiple pages."""
     async with AsyncClient(api_key="test-key") as client:
         page1_results = [{"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50)]
-        page2_results = [
-            {"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50, 75)
-        ]
+        page2_results = [{"dimensions": [f"Country{i}"], "metrics": [100]} for i in range(50, 75)]
 
         call_count = 0
 
@@ -219,8 +225,10 @@ async def test_async_query_all_multiple_pages(respx_mock: MockRouter) -> None:
 
         respx_mock.post("https://plausible.io/api/v2/query").mock(side_effect=mock_response)
 
-        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(
-            date(2024, 1, 1), date(2024, 1, 31)
+        query = (
+            QueryBuilder("example.com")
+            .metrics(Metric.VISITORS)
+            .date_range(date(2024, 1, 1), date(2024, 1, 31))
         )
 
         result = await client.query_all(query, page_size=50)
