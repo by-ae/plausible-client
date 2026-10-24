@@ -5,6 +5,7 @@ from plausible_client.client import Client
 from plausible_client.errors import (
     AuthenticationError,
     InvalidQueryError,
+    PaymentRequiredError,
     PlausibleError,
     RateLimitError,
     ServerError,
@@ -32,6 +33,7 @@ __all__ = [
     "AsyncClient",
     "PlausibleError",
     "AuthenticationError",
+    "PaymentRequiredError",
     "RateLimitError",
     "InvalidQueryError",
     "ServerError",

@@ -19,6 +19,13 @@ class AuthenticationError(PlausibleError):
         super().__init__(message, status_code=401)
 
 
+class PaymentRequiredError(PlausibleError):
+    """Raised when subscription payment is required (402)."""
+
+    def __init__(self, message: str = "Payment required") -> None:
+        super().__init__(message, status_code=402)
+
+
 class RateLimitError(PlausibleError):
     """Raised when rate limit is exceeded (429)."""
 

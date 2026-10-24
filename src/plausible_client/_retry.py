@@ -17,6 +17,17 @@ def should_retry(response: httpx.Response) -> bool:
     return response.status_code == 429 or 500 <= response.status_code < 600
 
 
+def should_retry_exception(exc: Exception) -> bool:
+    """
+    Check if an exception should be retried.
+
+    Timeouts are NOT retried as they indicate the server is too slow,
+    not temporarily unavailable. Connection errors and other network
+    issues are retried.
+    """
+    return not isinstance(exc, httpx.TimeoutException)
+
+
 def get_retry_after(response: httpx.Response, attempt: int) -> float:
     """Get the retry delay in seconds."""
     if response.status_code == 429 and "Retry-After" in response.headers:
@@ -58,7 +69,7 @@ def retry_sync(
 
         except httpx.HTTPError as e:
             last_exception = e
-            if attempt < max_retries:
+            if attempt < max_retries and should_retry_exception(e):
                 delay = 2**attempt
                 time.sleep(delay)
             else:
@@ -101,7 +112,7 @@ async def retry_async(
 
         except httpx.HTTPError as e:
             last_exception = e
-            if attempt < max_retries:
+            if attempt < max_retries and should_retry_exception(e):
                 delay = 2**attempt
                 await asyncio.sleep(delay)
             else:

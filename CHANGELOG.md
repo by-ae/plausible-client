@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PaymentRequiredError` exception for 402 Payment Required responses
+- Python 3.13 to CI test matrix
+- Improved timeout and network error handling with specific retry logic
+
+### Changed
+
+- Timeout exceptions (ConnectTimeout, ReadTimeout, etc.) are no longer retried
+- Connection errors and other network failures continue to be retried with exponential backoff
+
+### Added
+
 - Automatic pagination with `query_all()` method for Stats API queries
 - `include()` method on `QueryBuilder` for imports, time_labels, and total_rows options
 - Support for fetching all results across multiple pages automatically

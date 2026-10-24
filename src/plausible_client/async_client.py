@@ -8,6 +8,7 @@ from plausible_client._retry import retry_async
 from plausible_client.errors import (
     AuthenticationError,
     InvalidQueryError,
+    PaymentRequiredError,
     PlausibleError,
     ServerError,
 )
@@ -62,6 +63,7 @@ class AsyncClient:
 
         Raises:
             AuthenticationError: If authentication fails
+            PaymentRequiredError: If payment is required (subscription issue)
             InvalidQueryError: If the query is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
@@ -94,6 +96,7 @@ class AsyncClient:
         Raises:
             ValueError: If page_size is not between 1 and 10000
             AuthenticationError: If authentication fails
+            PaymentRequiredError: If payment is required (subscription issue)
             InvalidQueryError: If the query is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
@@ -156,6 +159,7 @@ class AsyncClient:
 
         Raises:
             AuthenticationError: If authentication fails
+            PaymentRequiredError: If payment is required (subscription issue)
             InvalidQueryError: If the event data is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
@@ -679,6 +683,9 @@ class AsyncClient:
         if response.status_code == 401:
             raise AuthenticationError("Invalid API key")
 
+        if response.status_code == 402:
+            raise PaymentRequiredError("Payment required to access this resource")
+
         if response.status_code == 400:
             try:
                 error_data = response.json()
@@ -710,6 +717,9 @@ class AsyncClient:
 
         if response.status_code == 401:
             raise AuthenticationError("Invalid API key")
+
+        if response.status_code == 402:
+            raise PaymentRequiredError("Payment required to access this resource")
 
         if response.status_code == 400:
             try:
