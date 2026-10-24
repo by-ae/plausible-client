@@ -312,6 +312,7 @@ The client raises typed exceptions for different error scenarios:
 from plausible_client import (
     Client,
     AuthenticationError,
+    PaymentRequiredError,
     RateLimitError,
     InvalidQueryError,
     ServerError,
@@ -323,6 +324,8 @@ try:
     result = client.query(query)
 except AuthenticationError:
     print("Invalid API key")
+except PaymentRequiredError:
+    print("Subscription payment required")
 except RateLimitError as e:
     print(f"Rate limited. Retry after {e.retry_after} seconds")
 except InvalidQueryError as e:
@@ -337,6 +340,9 @@ except ServerError as e:
 The client automatically retries on:
 - **429 (Rate Limit)**: Respects `Retry-After` header
 - **5xx (Server Errors)**: Exponential backoff (2^attempt seconds, max 60s)
+- **Connection Errors**: Network failures (excluding timeouts)
+
+Timeouts are NOT retried as they indicate the server is too slow rather than temporarily unavailable.
 
 Maximum 3 retries by default. After exhausting retries, raises `RateLimitError` or `ServerError`.
 
