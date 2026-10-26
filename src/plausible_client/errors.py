@@ -72,3 +72,17 @@ class ServerError(PlausibleError):
 
     def __init__(self, message: str, status_code: int = 500) -> None:
         super().__init__(message, status_code=status_code)
+
+
+class ForbiddenError(PlausibleError):
+    """Raised when the API key is not allowed to perform the request (403)."""
+
+    def __init__(self, message: str = "Forbidden") -> None:
+        super().__init__(message, status_code=403)
+
+
+class NotFoundError(PlausibleError):
+    """Raised when the requested resource does not exist (404)."""
+
+    def __init__(self, message: str = "Resource not found") -> None:
+        super().__init__(message, status_code=404)

@@ -216,7 +216,7 @@ class Goal:
     def from_dict(cls, data: dict[str, Any]) -> "Goal":
         """Create from API response."""
         return cls(
-            id=data["id"],
+            id=str(data["id"]),
             goal_type=data["goal_type"],
             display_name=data["display_name"],
             event_name=data.get("event_name"),

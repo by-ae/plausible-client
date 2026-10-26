@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from plausible_client.models import DateRange, Filter, OrderBy, QueryResult
+from plausible_client.models import DateRange, Filter, Goal, OrderBy, QueryResult
 
 
 def test_date_range_to_dict() -> None:
@@ -59,6 +59,22 @@ def test_query_result_from_response() -> None:
 
     assert len(result.results) == 2
     assert result.meta["total"] == 2
+
+
+def test_goal_id_is_string_when_api_sends_integer() -> None:
+    """Sites API goal ids are numeric in JSON and strings in the docs."""
+    goal = Goal.from_dict(
+        {
+            "id": 1,
+            "goal_type": "event",
+            "display_name": "Signup",
+            "event_name": "Signup",
+            "page_path": None,
+        }
+    )
+
+    assert goal.id == "1"
+    assert isinstance(goal.id, str)
 
 
 def test_query_result_empty_response() -> None:

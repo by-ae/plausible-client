@@ -4,14 +4,8 @@ from typing import Any
 
 import httpx
 
+from plausible_client._responses import raise_for_status, was_deleted
 from plausible_client._retry import retry_sync
-from plausible_client.errors import (
-    AuthenticationError,
-    InvalidQueryError,
-    PaymentRequiredError,
-    PlausibleError,
-    ServerError,
-)
 from plausible_client.models import Goal, Guest, QueryResult, SharedLink, Site, Team
 from plausible_client.query import QueryBuilder
 
@@ -383,7 +377,7 @@ class Client:
             f"{self.base_url}/api/v1/sites/{site_id}",
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     def list_goals(
         self,
@@ -494,7 +488,7 @@ class Client:
             json={"site_id": site_id},
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     def create_shared_link(self, site_id: str, name: str) -> SharedLink:
         """
@@ -672,7 +666,7 @@ class Client:
             params={"site_id": site_id},
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     def _handle_json_response(self, response: httpx.Response) -> dict[str, Any]:
         """Handle JSON API response and raise appropriate errors."""
@@ -680,31 +674,7 @@ class Client:
             data: dict[str, Any] = response.json()
             return data
 
-        if response.status_code == 401:
-            raise AuthenticationError("Invalid API key")
-
-        if response.status_code == 402:
-            raise PaymentRequiredError("Payment required to access this resource")
-
-        if response.status_code == 400:
-            try:
-                error_data = response.json()
-                message = error_data.get("error", "Invalid request")
-                errors = error_data if isinstance(error_data, dict) else None
-                raise InvalidQueryError(message, errors=errors)
-            except Exception as e:
-                if isinstance(e, InvalidQueryError):
-                    raise
-                raise InvalidQueryError("Invalid request") from None
-
-        if response.status_code >= 500:
-            raise ServerError(
-                f"Server error: {response.status_code}", status_code=response.status_code
-            )
-
-        raise PlausibleError(
-            f"Unexpected error: {response.status_code}", status_code=response.status_code
-        )
+        raise_for_status(response, invalid_message="Invalid request")
 
     def _handle_response(
         self, response: httpx.Response, result_class: type[QueryResult] | None = None
@@ -715,28 +685,4 @@ class Client:
                 return result_class.from_response(response.json())
             return None
 
-        if response.status_code == 401:
-            raise AuthenticationError("Invalid API key")
-
-        if response.status_code == 402:
-            raise PaymentRequiredError("Payment required to access this resource")
-
-        if response.status_code == 400:
-            try:
-                error_data = response.json()
-                message = error_data.get("error", "Invalid query")
-                errors = error_data if isinstance(error_data, dict) else None
-                raise InvalidQueryError(message, errors=errors)
-            except Exception as e:
-                if isinstance(e, InvalidQueryError):
-                    raise
-                raise InvalidQueryError("Invalid query") from None
-
-        if response.status_code >= 500:
-            raise ServerError(
-                f"Server error: {response.status_code}", status_code=response.status_code
-            )
-
-        raise PlausibleError(
-            f"Unexpected error: {response.status_code}", status_code=response.status_code
-        )
+        raise_for_status(response, invalid_message="Invalid query")

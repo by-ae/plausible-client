@@ -313,6 +313,8 @@ from plausible_client import (
     Client,
     AuthenticationError,
     PaymentRequiredError,
+    ForbiddenError,
+    NotFoundError,
     RateLimitError,
     InvalidQueryError,
     ServerError,
@@ -326,6 +328,10 @@ except AuthenticationError:
     print("Invalid API key")
 except PaymentRequiredError:
     print("Subscription payment required")
+except ForbiddenError as e:
+    print(f"API key cannot do this: {e.message}")
+except NotFoundError as e:
+    print(f"Missing resource: {e.message}")
 except RateLimitError as e:
     print(f"Rate limited. Retry after {e.retry_after} seconds")
 except InvalidQueryError as e:
