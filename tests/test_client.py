@@ -113,8 +113,10 @@ def test_client_invalid_query_error() -> None:
 
 
 @respx.mock
-def test_client_rate_limit_error() -> None:
+def test_client_rate_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test rate limit error handling."""
+    slept: list[float] = []
+    monkeypatch.setattr("plausible_client._retry.time.sleep", slept.append)
     respx.post("https://plausible.io/api/v2/query").mock(
         return_value=httpx.Response(429, headers={"Retry-After": "60"})
     )
@@ -126,6 +128,7 @@ def test_client_rate_limit_error() -> None:
         client.query(query)
 
     assert exc_info.value.retry_after == 60
+    assert slept == [60.0, 60.0, 60.0]
 
 
 @respx.mock

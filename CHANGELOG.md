@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- 429 responses honour `Retry-After` delay-seconds and HTTP-date values, including fractional seconds. A non-numeric header no longer raises `ValueError` after retries; it falls back to exponential backoff and leaves `RateLimitError.retry_after` unset
+- `RateLimitError` uses the JSON `error` message from a 429 body when one is present
 - Stats API v2 payload format now matches API specification at https://plausible.io/docs/stats-api
 - Pagination sent as nested `{"pagination": {"limit": N, "offset": M}}` object (was top-level keys)
 - `order_by` sent as list of `[metric, direction]` pairs (was list of dict objects)

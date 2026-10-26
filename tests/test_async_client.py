@@ -92,8 +92,14 @@ async def test_async_client_authentication_error() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_async_client_rate_limit_error() -> None:
+async def test_async_client_rate_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test async rate limit error handling."""
+    slept: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        slept.append(delay)
+
+    monkeypatch.setattr("plausible_client._retry.asyncio.sleep", record_sleep)
     respx.post("https://plausible.io/api/v2/query").mock(
         return_value=httpx.Response(429, headers={"Retry-After": "30"})
     )
@@ -105,6 +111,7 @@ async def test_async_client_rate_limit_error() -> None:
         await client.query(query)
 
     assert exc_info.value.retry_after == 30
+    assert slept == [30.0, 30.0, 30.0]
     await client.close()
 
 

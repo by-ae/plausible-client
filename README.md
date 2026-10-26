@@ -338,13 +338,13 @@ except ServerError as e:
 ### Retry Behavior
 
 The client automatically retries on:
-- **429 (Rate Limit)**: Respects `Retry-After` header
+- **429 (Rate Limit)**: Waits for the `Retry-After` header. Both delay-seconds (`60`, `1.5`) and HTTP-date values are honoured. If the header is missing or cannot be parsed, the client uses exponential backoff instead of failing the retry.
 - **5xx (Server Errors)**: Exponential backoff (2^attempt seconds, max 60s)
 - **Connection Errors**: Network failures (excluding timeouts)
 
 Timeouts are NOT retried as they indicate the server is too slow rather than temporarily unavailable.
 
-Maximum 3 retries by default. After exhausting retries, raises `RateLimitError` or `ServerError`.
+Maximum 3 retries by default. After exhausting retries, raises `RateLimitError` or `ServerError`. `RateLimitError.retry_after` is the parsed delay in seconds when `Retry-After` was understood, and the exception message includes the API `error` string when the response body has one. The Stats API rate limit is 600 requests per hour by default.
 
 ## Development
 
