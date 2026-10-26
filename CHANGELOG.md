@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PaymentRequiredError` exception for 402 Payment Required responses
 - `NotFoundError` for 404 responses and `ForbiddenError` for 403 responses, using the API `error` message when the body includes one
 - Events API `referrer` and `interactive` fields on `send_event()`
+- Stats API date-range presets (`"7d"`, `"month"`, `"all"`, and the other documented presets) on `QueryBuilder.date_range()`
+- `case_sensitive` filter modifier for `is` and `contains`
+- Metric and dimension constants that the Stats API documents and this client previously omitted, including revenue, scroll depth, time on page, goals, channel, place names, and time buckets
 - `EventResult` from `send_event()`, with `dropped` set from the `x-plausible-dropped` response header. The Events API returns HTTP 202 even when an event is discarded
 - Python 3.13 to CI test matrix
 - Improved timeout and network error handling with specific retry logic

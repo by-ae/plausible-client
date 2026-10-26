@@ -1,6 +1,8 @@
 """Tests for the QueryBuilder."""
 
-from datetime import date
+from datetime import date, datetime, timezone
+
+import pytest
 
 from plausible_client import Dimension, Metric, QueryBuilder
 
@@ -141,3 +143,85 @@ def test_query_builder_full_example() -> None:
     assert "date_range" in payload
     assert len(payload["order_by"]) == 1
     assert payload["pagination"]["limit"] == 50
+
+
+def test_query_builder_date_range_preset() -> None:
+    """Stats API presets are sent as a string, not a date pair."""
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d").build()
+
+    assert payload["date_range"] == "7d"
+
+
+def test_query_builder_unknown_date_preset() -> None:
+    """Unknown presets fail before a request is sent."""
+    with pytest.raises(ValueError, match="unknown date range preset"):
+        QueryBuilder("example.com").date_range("fortnight")
+
+
+def test_query_builder_preset_rejects_end_date() -> None:
+    """A preset does not combine with an end date."""
+    with pytest.raises(TypeError):
+        QueryBuilder("example.com").date_range("7d", date(2024, 1, 1))
+
+
+def test_query_builder_datetime_range() -> None:
+    """Custom ranges accept timezone-aware datetimes."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(
+            datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
+            datetime(2024, 1, 1, 15, 59, 59, tzinfo=timezone.utc),
+        )
+        .build()
+    )
+
+    assert payload["date_range"] == [
+        "2024-01-01T12:00:00+00:00",
+        "2024-01-01T15:59:59+00:00",
+    ]
+
+
+def test_query_builder_case_insensitive_filter() -> None:
+    """is and contains accept the documented case_sensitive modifier."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .filter(Dimension.VISIT_COUNTRY_NAME, "contains", ["united", "EST"], case_sensitive=False)
+        .build()
+    )
+
+    assert payload["filters"] == [
+        ["contains", "visit:country_name", ["united", "EST"], {"case_sensitive": False}]
+    ]
+
+
+def test_query_builder_case_sensitive_rejected_for_other_operators() -> None:
+    """The modifier is not documented for operators other than is and contains."""
+    with pytest.raises(ValueError, match="case_sensitive"):
+        QueryBuilder("example.com").filter(
+            Dimension.EVENT_PAGE, "matches", "^/user/", case_sensitive=False
+        )
+
+
+def test_documented_metric_and_dimension_names() -> None:
+    """Constants match the Stats API metric and dimension names."""
+    assert Metric.SCROLL_DEPTH == "scroll_depth"
+    assert Metric.PERCENTAGE == "percentage"
+    assert Metric.GROUP_CONVERSION_RATE == "group_conversion_rate"
+    assert Metric.AVERAGE_REVENUE == "average_revenue"
+    assert Metric.TOTAL_REVENUE == "total_revenue"
+    assert Metric.TIME_ON_PAGE == "time_on_page"
+    assert Dimension.EVENT_GOAL == "event:goal"
+    assert Dimension.EVENT_HOSTNAME == "event:hostname"
+    assert Dimension.VISIT_ENTRY_PAGE == "visit:entry_page"
+    assert Dimension.VISIT_EXIT_PAGE == "visit:exit_page"
+    assert Dimension.VISIT_CHANNEL == "visit:channel"
+    assert Dimension.VISIT_COUNTRY_NAME == "visit:country_name"
+    assert Dimension.VISIT_REGION_NAME == "visit:region_name"
+    assert Dimension.VISIT_CITY_NAME == "visit:city_name"
+    assert Dimension.TIME == "time"
+    assert Dimension.TIME_HOUR == "time:hour"
+    assert Dimension.TIME_DAY == "time:day"
+    assert Dimension.TIME_WEEK == "time:week"
+    assert Dimension.TIME_MONTH == "time:month"

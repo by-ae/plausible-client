@@ -1,8 +1,27 @@
 """Query builder for Plausible Stats API v2."""
 
+from datetime import date
 from typing import Any, Literal
 
 from plausible_client.models import DateRange, Filter, OrderBy
+
+# Presets accepted by the Stats API date_range field.
+# https://plausible.io/docs/stats-api
+DATE_RANGE_PRESETS = frozenset(
+    {
+        "day",
+        "24h",
+        "7d",
+        "28d",
+        "30d",
+        "91d",
+        "month",
+        "6mo",
+        "12mo",
+        "year",
+        "all",
+    }
+)
 
 
 class QueryBuilder:
@@ -12,7 +31,7 @@ class QueryBuilder:
         self.site_id = site_id
         self._metrics: list[str] = []
         self._dimensions: list[str] = []
-        self._filters: list[list[str | list[str]]] = []
+        self._filters: list[list[str | list[str] | dict[str, bool]]] = []
         self._date_range: dict[str, Any] | None = None
         self._order_by: list[list[str]] = []
         self._limit: int = 10000
@@ -42,6 +61,8 @@ class QueryBuilder:
             "does_not_contain",
         ],
         value: str | list[str],
+        *,
+        case_sensitive: bool | None = None,
     ) -> "QueryBuilder":
         """
         Add a filter to the query.
@@ -50,14 +71,42 @@ class QueryBuilder:
             dimension: The dimension to filter on
             operator: Filter operator (does_not_contain is deprecated, use contains_not)
             value: Single value or list of values to filter by
+            case_sensitive: Case-sensitivity modifier for ``is`` and ``contains``.
+                The Stats API only documents this modifier for those two operators.
         """
         clauses = [value] if isinstance(value, str) else value
-        filter_obj = Filter(operator=operator, dimension=dimension, clauses=clauses)
+        filter_obj = Filter(
+            operator=operator,
+            dimension=dimension,
+            clauses=clauses,
+            case_sensitive=case_sensitive,
+        )
         self._filters.append(filter_obj.to_dict())
         return self
 
-    def date_range(self, start_date: Any, end_date: Any) -> "QueryBuilder":
-        """Set the date range for the query."""
+    def date_range(self, start_date: date | str, end_date: date | None = None) -> "QueryBuilder":
+        """
+        Set the date range for the query.
+
+        The Stats API requires ``date_range``. Pass one documented preset
+        (``"day"``, ``"24h"``, ``"7d"``, ``"28d"``, ``"30d"``, ``"91d"``,
+        ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``) or a
+        start and end ``date`` or ``datetime``.
+        """
+        if isinstance(start_date, str):
+            if end_date is not None:
+                raise TypeError("preset date ranges do not take an end date")
+            if start_date not in DATE_RANGE_PRESETS:
+                presets = ", ".join(sorted(DATE_RANGE_PRESETS))
+                raise ValueError(
+                    f"unknown date range preset {start_date!r}. Expected one of: {presets}"
+                )
+            self._date_range = {"date_range": start_date}
+            return self
+
+        if end_date is None:
+            raise TypeError("date_range() requires an end date when the start is a date")
+
         date_range_obj = DateRange(start_date=start_date, end_date=end_date)
         self._date_range = date_range_obj.to_dict()
         return self
