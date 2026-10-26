@@ -37,17 +37,25 @@ class Filter:
     ]
     dimension: str
     clauses: list[str]
+    case_sensitive: bool | None = None
 
-    def to_dict(self) -> list[str | list[str]]:
+    def to_dict(self) -> list[str | list[str] | dict[str, bool]]:
         """
-        Convert to API format: [operator, dimension, clauses].
+        Convert to API format: [operator, dimension, clauses] or
+        [operator, dimension, clauses, {"case_sensitive": bool}].
 
         Maps deprecated 'does_not_contain' to 'contains_not' for API compatibility.
+        The case_sensitive modifier is documented for ``is`` and ``contains`` only.
         """
         operator = self.operator
         if operator == "does_not_contain":
             operator = "contains_not"
-        return [operator, self.dimension, self.clauses]
+        result: list[str | list[str] | dict[str, bool]] = [operator, self.dimension, self.clauses]
+        if self.case_sensitive is not None:
+            if operator not in ("is", "contains"):
+                raise ValueError("case_sensitive is only valid for 'is' and 'contains' filters")
+            result.append({"case_sensitive": self.case_sensitive})
+        return result
 
 
 @dataclass
@@ -72,7 +80,13 @@ class Metric:
     BOUNCE_RATE = "bounce_rate"
     VISIT_DURATION = "visit_duration"
     EVENTS = "events"
+    SCROLL_DEPTH = "scroll_depth"
+    PERCENTAGE = "percentage"
     CONVERSION_RATE = "conversion_rate"
+    GROUP_CONVERSION_RATE = "group_conversion_rate"
+    AVERAGE_REVENUE = "average_revenue"
+    TOTAL_REVENUE = "total_revenue"
+    TIME_ON_PAGE = "time_on_page"
 
 
 class Dimension:
@@ -80,7 +94,14 @@ class Dimension:
 
     EVENT_NAME = "event:name"
     EVENT_PAGE = "event:page"
+    EVENT_GOAL = "event:goal"
+    EVENT_HOSTNAME = "event:hostname"
+    VISIT_ENTRY_PAGE = "visit:entry_page"
+    VISIT_ENTRY_PAGE_HOSTNAME = "visit:entry_page_hostname"
+    VISIT_EXIT_PAGE = "visit:exit_page"
+    VISIT_EXIT_PAGE_HOSTNAME = "visit:exit_page_hostname"
     VISIT_SOURCE = "visit:source"
+    VISIT_CHANNEL = "visit:channel"
     VISIT_REFERRER = "visit:referrer"
     VISIT_UTM_MEDIUM = "visit:utm_medium"
     VISIT_UTM_SOURCE = "visit:utm_source"
@@ -95,6 +116,26 @@ class Dimension:
     VISIT_COUNTRY = "visit:country"
     VISIT_REGION = "visit:region"
     VISIT_CITY = "visit:city"
+    VISIT_COUNTRY_NAME = "visit:country_name"
+    VISIT_REGION_NAME = "visit:region_name"
+    VISIT_CITY_NAME = "visit:city_name"
+    TIME = "time"
+    TIME_HOUR = "time:hour"
+    TIME_DAY = "time:day"
+    TIME_WEEK = "time:week"
+    TIME_MONTH = "time:month"
+
+
+@dataclass(frozen=True)
+class EventResult:
+    """Outcome of an Events API request.
+
+    The API returns HTTP 202 even when an event is dropped. ``dropped`` is
+    true when the ``x-plausible-dropped`` header is a positive count. The
+    docs use the value ``1``.
+    """
+
+    dropped: bool = False
 
 
 @dataclass
@@ -216,7 +257,7 @@ class Goal:
     def from_dict(cls, data: dict[str, Any]) -> "Goal":
         """Create from API response."""
         return cls(
-            id=data["id"],
+            id=str(data["id"]),
             goal_type=data["goal_type"],
             display_name=data["display_name"],
             event_name=data.get("event_name"),

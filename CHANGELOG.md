@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `PaymentRequiredError` exception for 402 Payment Required responses
+- `NotFoundError` for 404 responses and `ForbiddenError` for 403 responses, using the API `error` message when the body includes one
+- Events API `referrer` and `interactive` fields on `send_event()`
+- Stats API date-range presets (`"7d"`, `"month"`, `"all"`, and the other documented presets) on `QueryBuilder.date_range()`
+- `case_sensitive` filter modifier for `is` and `contains`
+- Metric and dimension constants that the Stats API documents and this client previously omitted, including revenue, scroll depth, time on page, goals, channel, place names, and time buckets
+- `EventResult` from `send_event()`, with `dropped` set from the `x-plausible-dropped` response header. The Events API returns HTTP 202 even when an event is discarded
 - Python 3.13 to CI test matrix
 - Improved timeout and network error handling with specific retry logic
 
@@ -37,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Sites API deletion checks accept the boolean `true` the server returns, as well as the string `"true"` shown in the docs examples. `delete_site()`, `delete_goal()`, and `delete_guest()` no longer report failure after a successful delete
+- Goal ids from the Sites API are coerced to strings, matching the documented id format
+- 400 responses that use an `errors` object (Events API validation) include those details in `InvalidQueryError`
+- 429 responses honour `Retry-After` delay-seconds and HTTP-date values, including fractional seconds. A non-numeric header no longer raises `ValueError` after retries; it falls back to exponential backoff and leaves `RateLimitError.retry_after` unset
+- `RateLimitError` uses the JSON `error` message from a 429 body when one is present
 - Stats API v2 payload format now matches API specification at https://plausible.io/docs/stats-api
 - Pagination sent as nested `{"pagination": {"limit": N, "offset": M}}` object (was top-level keys)
 - `order_by` sent as list of `[metric, direction]` pairs (was list of dict objects)

@@ -4,15 +4,9 @@ from typing import Any
 
 import httpx
 
+from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_async
-from plausible_client.errors import (
-    AuthenticationError,
-    InvalidQueryError,
-    PaymentRequiredError,
-    PlausibleError,
-    ServerError,
-)
-from plausible_client.models import Goal, Guest, QueryResult, SharedLink, Site, Team
+from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
 from plausible_client.query import QueryBuilder
 
 
@@ -144,7 +138,9 @@ class AsyncClient:
         x_forwarded_for: str | None = None,
         props: dict[str, str | int | float | bool] | None = None,
         revenue: dict[str, Any] | None = None,
-    ) -> None:
+        referrer: str | None = None,
+        interactive: bool | None = None,
+    ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
 
@@ -156,6 +152,14 @@ class AsyncClient:
             x_forwarded_for: X-Forwarded-For header for visitor IP (recommended)
             props: Custom properties (max 30 properties)
             revenue: Revenue data with amount and currency
+            referrer: Referrer URL for this event (document.referrer for pageviews)
+            interactive: Whether the event counts toward bounce rate.
+                Omit to let Plausible treat the event as interactive.
+
+        Returns:
+            EventResult. ``dropped`` is true when the response includes a
+            positive ``x-plausible-dropped`` count. The API still returns
+            HTTP 202 in that case.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -182,6 +186,12 @@ class AsyncClient:
         if revenue:
             payload["revenue"] = revenue
 
+        if referrer:
+            payload["referrer"] = referrer
+
+        if interactive is not None:
+            payload["interactive"] = interactive
+
         response = await retry_async(
             self._client.post,
             f"{self.base_url}/api/event",
@@ -189,6 +199,7 @@ class AsyncClient:
             headers=headers,
         )
         self._handle_response(response)
+        return EventResult(dropped=event_was_dropped(response))
 
     async def list_sites(
         self,
@@ -383,7 +394,7 @@ class AsyncClient:
             f"{self.base_url}/api/v1/sites/{site_id}",
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     async def list_goals(
         self,
@@ -494,7 +505,7 @@ class AsyncClient:
             json={"site_id": site_id},
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     async def create_shared_link(self, site_id: str, name: str) -> SharedLink:
         """
@@ -672,7 +683,7 @@ class AsyncClient:
             params={"site_id": site_id},
         )
         data = self._handle_json_response(response)
-        return data.get("deleted") == "true"
+        return was_deleted(data)
 
     def _handle_json_response(self, response: httpx.Response) -> dict[str, Any]:
         """Handle JSON API response and raise appropriate errors."""
@@ -680,31 +691,7 @@ class AsyncClient:
             data: dict[str, Any] = response.json()
             return data
 
-        if response.status_code == 401:
-            raise AuthenticationError("Invalid API key")
-
-        if response.status_code == 402:
-            raise PaymentRequiredError("Payment required to access this resource")
-
-        if response.status_code == 400:
-            try:
-                error_data = response.json()
-                message = error_data.get("error", "Invalid request")
-                errors = error_data if isinstance(error_data, dict) else None
-                raise InvalidQueryError(message, errors=errors)
-            except Exception as e:
-                if isinstance(e, InvalidQueryError):
-                    raise
-                raise InvalidQueryError("Invalid request") from None
-
-        if response.status_code >= 500:
-            raise ServerError(
-                f"Server error: {response.status_code}", status_code=response.status_code
-            )
-
-        raise PlausibleError(
-            f"Unexpected error: {response.status_code}", status_code=response.status_code
-        )
+        raise_for_status(response, invalid_message="Invalid request")
 
     def _handle_response(
         self, response: httpx.Response, result_class: type[QueryResult] | None = None
@@ -715,28 +702,4 @@ class AsyncClient:
                 return result_class.from_response(response.json())
             return None
 
-        if response.status_code == 401:
-            raise AuthenticationError("Invalid API key")
-
-        if response.status_code == 402:
-            raise PaymentRequiredError("Payment required to access this resource")
-
-        if response.status_code == 400:
-            try:
-                error_data = response.json()
-                message = error_data.get("error", "Invalid query")
-                errors = error_data if isinstance(error_data, dict) else None
-                raise InvalidQueryError(message, errors=errors)
-            except Exception as e:
-                if isinstance(e, InvalidQueryError):
-                    raise
-                raise InvalidQueryError("Invalid query") from None
-
-        if response.status_code >= 500:
-            raise ServerError(
-                f"Server error: {response.status_code}", status_code=response.status_code
-            )
-
-        raise PlausibleError(
-            f"Unexpected error: {response.status_code}", status_code=response.status_code
-        )
+        raise_for_status(response, invalid_message="Invalid query")

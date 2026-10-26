@@ -4,7 +4,9 @@ from plausible_client.async_client import AsyncClient
 from plausible_client.client import Client
 from plausible_client.errors import (
     AuthenticationError,
+    ForbiddenError,
     InvalidQueryError,
+    NotFoundError,
     PaymentRequiredError,
     PlausibleError,
     RateLimitError,
@@ -13,6 +15,7 @@ from plausible_client.errors import (
 from plausible_client.models import (
     DateRange,
     Dimension,
+    EventResult,
     Filter,
     Goal,
     Guest,
@@ -34,11 +37,14 @@ __all__ = [
     "PlausibleError",
     "AuthenticationError",
     "PaymentRequiredError",
+    "ForbiddenError",
+    "NotFoundError",
     "RateLimitError",
     "InvalidQueryError",
     "ServerError",
     "QueryBuilder",
     "QueryResult",
+    "EventResult",
     "Metric",
     "Dimension",
     "Filter",

@@ -109,7 +109,19 @@ client.send_event(
         "amount": 99.99,
         "currency": "USD",
     },
+    referrer="https://news.ycombinator.com/",
 )
+
+# A non-interactive event is excluded from bounce-rate calculations.
+# HTTP 202 does not mean the event was recorded: check result.dropped.
+result = client.send_event(
+    domain="example.com",
+    name="scroll",
+    url="https://example.com/docs",
+    interactive=False,
+)
+if result.dropped:
+    print("Event was dropped (see the x-plausible-dropped response header)")
 ```
 
 ### Sites API - Managing Sites Programmatically
@@ -168,6 +180,8 @@ print(f"Share at: {link.url}")
 The `QueryBuilder` supports all Stats API v2 features:
 
 ```python
+from datetime import date
+
 from plausible_client import QueryBuilder, Metric, Dimension
 
 query = (
@@ -189,7 +203,9 @@ query = (
     .filter(Dimension.VISIT_SOURCE, "is", "Google")
     .filter(Dimension.VISIT_COUNTRY, "is_not", ["US", "UK"])
     .filter(Dimension.EVENT_PAGE, "contains", "/blog/")
-    # Date range
+    # Case-insensitive match (Stats API modifier for "is" and "contains")
+    .filter(Dimension.VISIT_COUNTRY_NAME, "contains", "united", case_sensitive=False)
+    # Custom date range. Presets also work: .date_range("7d")
     .date_range(date(2024, 1, 1), date(2024, 1, 31))
     # Ordering
     .order_by(Metric.VISITORS, "desc")
@@ -200,6 +216,8 @@ query = (
     .include(imports=True, time_labels=True, total_rows=True)
 )
 ```
+
+`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range can be two dates or two timezone-aware datetimes.
 
 ### Automatic Pagination
 
@@ -258,7 +276,13 @@ Metric.VIEWS_PER_VISIT  # Average pageviews per visit
 Metric.BOUNCE_RATE  # Bounce rate percentage
 Metric.VISIT_DURATION  # Average visit duration
 Metric.EVENTS  # Total custom events
-Metric.CONVERSION_RATE  # Goal conversion rate
+Metric.SCROLL_DEPTH  # Average scroll depth (needs event:page)
+Metric.PERCENTAGE  # Share of visitors (needs a dimension)
+Metric.CONVERSION_RATE  # Goal conversion rate (needs event:goal)
+Metric.GROUP_CONVERSION_RATE  # Conversion rate within each dimension group
+Metric.AVERAGE_REVENUE  # Average revenue for a revenue goal
+Metric.TOTAL_REVENUE  # Total revenue for a revenue goal
+Metric.TIME_ON_PAGE  # Average seconds on a page (needs event:page)
 ```
 
 ### Available Dimensions
@@ -269,9 +293,14 @@ from plausible_client import Dimension
 # Event dimensions
 Dimension.EVENT_NAME
 Dimension.EVENT_PAGE
+Dimension.EVENT_GOAL
+Dimension.EVENT_HOSTNAME
 
 # Visit dimensions
+Dimension.VISIT_ENTRY_PAGE
+Dimension.VISIT_EXIT_PAGE
 Dimension.VISIT_SOURCE
+Dimension.VISIT_CHANNEL
 Dimension.VISIT_REFERRER
 Dimension.VISIT_UTM_MEDIUM
 Dimension.VISIT_UTM_SOURCE
@@ -290,6 +319,16 @@ Dimension.VISIT_OS_VERSION
 Dimension.VISIT_COUNTRY
 Dimension.VISIT_REGION
 Dimension.VISIT_CITY
+Dimension.VISIT_COUNTRY_NAME
+Dimension.VISIT_REGION_NAME
+Dimension.VISIT_CITY_NAME
+
+# Time dimensions (not usable in filters; set date_range instead)
+Dimension.TIME
+Dimension.TIME_HOUR
+Dimension.TIME_DAY
+Dimension.TIME_WEEK
+Dimension.TIME_MONTH
 ```
 
 ### Self-Hosted Plausible
@@ -313,6 +352,8 @@ from plausible_client import (
     Client,
     AuthenticationError,
     PaymentRequiredError,
+    ForbiddenError,
+    NotFoundError,
     RateLimitError,
     InvalidQueryError,
     ServerError,
@@ -326,6 +367,10 @@ except AuthenticationError:
     print("Invalid API key")
 except PaymentRequiredError:
     print("Subscription payment required")
+except ForbiddenError as e:
+    print(f"API key cannot do this: {e.message}")
+except NotFoundError as e:
+    print(f"Missing resource: {e.message}")
 except RateLimitError as e:
     print(f"Rate limited. Retry after {e.retry_after} seconds")
 except InvalidQueryError as e:
@@ -338,13 +383,13 @@ except ServerError as e:
 ### Retry Behavior
 
 The client automatically retries on:
-- **429 (Rate Limit)**: Respects `Retry-After` header
+- **429 (Rate Limit)**: Waits for the `Retry-After` header. Both delay-seconds (`60`, `1.5`) and HTTP-date values are honoured. If the header is missing or cannot be parsed, the client uses exponential backoff instead of failing the retry.
 - **5xx (Server Errors)**: Exponential backoff (2^attempt seconds, max 60s)
 - **Connection Errors**: Network failures (excluding timeouts)
 
 Timeouts are NOT retried as they indicate the server is too slow rather than temporarily unavailable.
 
-Maximum 3 retries by default. After exhausting retries, raises `RateLimitError` or `ServerError`.
+Maximum 3 retries by default. After exhausting retries, raises `RateLimitError` or `ServerError`. `RateLimitError.retry_after` is the parsed delay in seconds when `Retry-After` was understood, and the exception message includes the API `error` string when the response body has one. The Stats API rate limit is 600 requests per hour by default.
 
 ## Development
 
