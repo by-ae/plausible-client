@@ -53,6 +53,22 @@ def raise_for_status(response: httpx.Response, *, invalid_message: str) -> NoRet
     )
 
 
+def event_was_dropped(response: httpx.Response) -> bool:
+    """Return whether the Events API discarded the event.
+
+    A dropped event can still be HTTP 202. The response header
+    ``x-plausible-dropped`` is ``1`` in the docs and a positive count in
+    the server.
+    """
+    raw = response.headers.get("x-plausible-dropped")
+    if raw is None:
+        return False
+    try:
+        return int(raw) > 0
+    except ValueError:
+        return False
+
+
 def was_deleted(payload: dict[str, Any]) -> bool:
     """Return whether a Sites API delete response reports success.
 

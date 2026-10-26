@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `PaymentRequiredError` exception for 402 Payment Required responses
 - `NotFoundError` for 404 responses and `ForbiddenError` for 403 responses, using the API `error` message when the body includes one
+- Events API `referrer` and `interactive` fields on `send_event()`
+- `EventResult` from `send_event()`, with `dropped` set from the `x-plausible-dropped` response header. The Events API returns HTTP 202 even when an event is discarded
 - Python 3.13 to CI test matrix
 - Improved timeout and network error handling with specific retry logic
 

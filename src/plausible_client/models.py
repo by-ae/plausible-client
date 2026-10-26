@@ -97,6 +97,18 @@ class Dimension:
     VISIT_CITY = "visit:city"
 
 
+@dataclass(frozen=True)
+class EventResult:
+    """Outcome of an Events API request.
+
+    The API returns HTTP 202 even when an event is dropped. ``dropped`` is
+    true when the ``x-plausible-dropped`` header is a positive count. The
+    docs use the value ``1``.
+    """
+
+    dropped: bool = False
+
+
 @dataclass
 class QueryResult:
     """Result from a Stats API query."""

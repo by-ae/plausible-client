@@ -109,7 +109,19 @@ client.send_event(
         "amount": 99.99,
         "currency": "USD",
     },
+    referrer="https://news.ycombinator.com/",
 )
+
+# A non-interactive event is excluded from bounce-rate calculations.
+# HTTP 202 does not mean the event was recorded: check result.dropped.
+result = client.send_event(
+    domain="example.com",
+    name="scroll",
+    url="https://example.com/docs",
+    interactive=False,
+)
+if result.dropped:
+    print("Event was dropped (see the x-plausible-dropped response header)")
 ```
 
 ### Sites API - Managing Sites Programmatically

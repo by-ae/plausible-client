@@ -4,9 +4,9 @@ from typing import Any
 
 import httpx
 
-from plausible_client._responses import raise_for_status, was_deleted
+from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_sync
-from plausible_client.models import Goal, Guest, QueryResult, SharedLink, Site, Team
+from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
 from plausible_client.query import QueryBuilder
 
 
@@ -138,7 +138,9 @@ class Client:
         x_forwarded_for: str | None = None,
         props: dict[str, str | int | float | bool] | None = None,
         revenue: dict[str, Any] | None = None,
-    ) -> None:
+        referrer: str | None = None,
+        interactive: bool | None = None,
+    ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
 
@@ -150,6 +152,14 @@ class Client:
             x_forwarded_for: X-Forwarded-For header for visitor IP (recommended)
             props: Custom properties (max 30 properties)
             revenue: Revenue data with amount and currency
+            referrer: Referrer URL for this event (document.referrer for pageviews)
+            interactive: Whether the event counts toward bounce rate.
+                Omit to let Plausible treat the event as interactive.
+
+        Returns:
+            EventResult. ``dropped`` is true when the response includes a
+            positive ``x-plausible-dropped`` count. The API still returns
+            HTTP 202 in that case.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -176,6 +186,12 @@ class Client:
         if revenue:
             payload["revenue"] = revenue
 
+        if referrer:
+            payload["referrer"] = referrer
+
+        if interactive is not None:
+            payload["interactive"] = interactive
+
         response = retry_sync(
             self._client.post,
             f"{self.base_url}/api/event",
@@ -183,6 +199,7 @@ class Client:
             headers=headers,
         )
         self._handle_response(response)
+        return EventResult(dropped=event_was_dropped(response))
 
     def list_sites(
         self,

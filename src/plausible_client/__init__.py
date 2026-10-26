@@ -15,6 +15,7 @@ from plausible_client.errors import (
 from plausible_client.models import (
     DateRange,
     Dimension,
+    EventResult,
     Filter,
     Goal,
     Guest,
@@ -43,6 +44,7 @@ __all__ = [
     "ServerError",
     "QueryBuilder",
     "QueryResult",
+    "EventResult",
     "Metric",
     "Dimension",
     "Filter",
