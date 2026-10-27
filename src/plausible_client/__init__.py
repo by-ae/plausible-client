@@ -27,7 +27,15 @@ from plausible_client.models import (
     Team,
     TrackerScriptConfiguration,
 )
-from plausible_client.query import QueryBuilder
+from plausible_client.query import (
+    QueryBuilder,
+    all_of,
+    any_of,
+    filter_clause,
+    has_done,
+    has_not_done,
+    negate,
+)
 
 __version__ = "0.1.0"
 
@@ -43,6 +51,12 @@ __all__ = [
     "InvalidQueryError",
     "ServerError",
     "QueryBuilder",
+    "filter_clause",
+    "all_of",
+    "any_of",
+    "negate",
+    "has_done",
+    "has_not_done",
     "QueryResult",
     "EventResult",
     "Metric",

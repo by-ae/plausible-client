@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `QueryBuilder.where()` plus `filter_clause()`, `any_of()`, `all_of()`, and `negate()` for the Stats API `or`, `and`, and `not` filters. `has_done()` and `has_not_done()` build behavioral filters, which only accept an event dimension and cannot be nested
+- `Dimension.event_property()` for the documented `event:props:<name>` custom-property dimension
 - `PaymentRequiredError` exception for 402 Payment Required responses
 - `NotFoundError` for 404 responses and `ForbiddenError` for 403 responses, using the API `error` message when the body includes one
 - Events API `referrer` and `interactive` fields on `send_event()`

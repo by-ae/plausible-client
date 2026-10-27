@@ -58,7 +58,7 @@ class QueryBuilder:
         self.site_id = site_id
         self._metrics: list[str] = []
         self._dimensions: list[str] = []
-        self._filters: list[list[str | list[str | int] | dict[str, bool]]] = []
+        self._filters: list[list[Any]] = []
         self._date_range: dict[str, Any] | None = None
         self._order_by: list[list[str]] = []
         self._limit: int = 10000
@@ -112,6 +112,21 @@ class QueryBuilder:
             case_sensitive=case_sensitive,
         )
         self._filters.append(filter_obj.to_dict())
+        return self
+
+    def where(self, *expressions: list[Any]) -> "QueryBuilder":
+        """
+        Append logical or behavioral filter expressions.
+
+        Top-level filters are combined with an implicit ``and``. Build
+        expressions with ``filter_clause``, ``any_of``, ``all_of``,
+        ``negate``, ``has_done``, and ``has_not_done``.
+        """
+        if not expressions:
+            raise TypeError("where() requires at least one filter expression")
+        for expression in expressions:
+            _require_filter_expression(expression)
+            self._filters.append(expression)
         return self
 
     def date_range(self, start_date: date | str, end_date: date | None = None) -> "QueryBuilder":
@@ -220,3 +235,78 @@ class QueryBuilder:
             payload["include"] = self._include
 
         return payload
+
+
+def filter_clause(
+    dimension: str,
+    operator: Literal[
+        "is",
+        "is_not",
+        "contains",
+        "contains_not",
+        "matches",
+        "matches_not",
+        "does_not_contain",
+    ],
+    value: str | int | list[str | int],
+    *,
+    case_sensitive: bool | None = None,
+) -> list[Any]:
+    """Build one simple filter without adding it to a query."""
+    return Filter(
+        operator=operator,
+        dimension=dimension,
+        clauses=normalize_clauses(value),
+        case_sensitive=case_sensitive,
+    ).to_dict()
+
+
+def all_of(*filters: list[Any]) -> list[Any]:
+    """Combine filters with ``and``. The result is ``["and", [filters...]]``."""
+    _require_combined_filters(filters, "all_of")
+    return ["and", list(filters)]
+
+
+def any_of(*filters: list[Any]) -> list[Any]:
+    """Combine filters with ``or``. The result is ``["or", [filters...]]``."""
+    _require_combined_filters(filters, "any_of")
+    return ["or", list(filters)]
+
+
+def negate(expression: list[Any]) -> list[Any]:
+    """Negate one filter. The result is ``["not", filter]``."""
+    _require_filter_expression(expression)
+    return ["not", expression]
+
+
+def has_done(expression: list[Any]) -> list[Any]:
+    """Keep sessions in which the event filter also matched."""
+    _require_event_filter(expression)
+    return ["has_done", expression]
+
+
+def has_not_done(expression: list[Any]) -> list[Any]:
+    """Drop sessions in which the event filter matched."""
+    _require_event_filter(expression)
+    return ["has_not_done", expression]
+
+
+def _require_combined_filters(filters: tuple[list[Any], ...], name: str) -> None:
+    if len(filters) < 2:
+        raise ValueError(f"{name}() requires at least two filters")
+    for expression in filters:
+        _require_filter_expression(expression)
+
+
+def _require_filter_expression(expression: list[Any]) -> None:
+    if not isinstance(expression, list) or not expression or not isinstance(expression[0], str):
+        raise TypeError("expected a Stats API filter expression")
+
+
+def _require_event_filter(expression: list[Any]) -> None:
+    _require_filter_expression(expression)
+    if expression[0] in ("has_done", "has_not_done"):
+        raise ValueError("Behavioral filters (has_done, has_not_done) cannot be nested.")
+    dimension = expression[1] if len(expression) > 1 else None
+    if not isinstance(dimension, str) or not dimension.startswith("event:"):
+        raise ValueError("has_done and has_not_done only accept an event dimension filter")

@@ -174,6 +174,18 @@ class Dimension:
     TIME_WEEK = "time:week"
     TIME_MONTH = "time:month"
 
+    @staticmethod
+    def event_property(name: str) -> str:
+        """Return the dimension name for a custom property.
+
+        The Stats API form is ``event:props:<custom_prop_name>``.
+        """
+        if not isinstance(name, str) or not name or name.startswith("event:"):
+            raise ValueError(
+                "event_property() expects a custom property name, for example 'author'"
+            )
+        return f"event:props:{name}"
+
 
 @dataclass(frozen=True)
 class EventResult:

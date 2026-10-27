@@ -222,6 +222,35 @@ query = (
 
 `date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
 
+Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
+
+```python
+from plausible_client import (
+    QueryBuilder,
+    Dimension,
+    Metric,
+    any_of,
+    filter_clause,
+    has_done,
+    has_not_done,
+)
+
+query = (
+    QueryBuilder("example.com")
+    .metrics(Metric.VISITORS)
+    .date_range("7d")
+    .dimensions(Dimension.event_property("author"))
+    .where(
+        any_of(
+            filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+            filter_clause(Dimension.VISIT_CITY_NAME, "is", "Tallinn"),
+        ),
+        has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing")),
+        has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")),
+    )
+)
+```
+
 ### Automatic Pagination
 
 For queries with many results, use `query_all()` to automatically fetch all pages:

@@ -4,7 +4,17 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from plausible_client import Dimension, Metric, QueryBuilder
+from plausible_client import (
+    Dimension,
+    Metric,
+    QueryBuilder,
+    all_of,
+    any_of,
+    filter_clause,
+    has_done,
+    has_not_done,
+    negate,
+)
 
 
 def test_query_builder_basic() -> None:
@@ -267,6 +277,109 @@ def test_query_builder_case_sensitive_rejected_for_other_operators() -> None:
         QueryBuilder("example.com").filter(
             Dimension.EVENT_PAGE, "matches", "^/user/", case_sensitive=False
         )
+
+
+def test_any_of_matches_the_documented_or_filter() -> None:
+    """or is ["or", [filter, filter]], as in the Stats API reference."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            any_of(
+                filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+                filter_clause(Dimension.VISIT_CITY_NAME, "is", "Tallinn"),
+            )
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        [
+            "or",
+            [
+                ["is", "visit:country_name", ["Germany"]],
+                ["is", "visit:city_name", ["Tallinn"]],
+            ],
+        ]
+    ]
+
+
+def test_all_of_and_negate_match_the_documented_forms() -> None:
+    """and and not use the shapes shown in the Stats API reference."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            all_of(
+                filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+                filter_clause(Dimension.VISIT_CITY_NAME, "is", "Berlin"),
+            ),
+            negate(filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany")),
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        [
+            "and",
+            [
+                ["is", "visit:country_name", ["Germany"]],
+                ["is", "visit:city_name", ["Berlin"]],
+            ],
+        ],
+        ["not", ["is", "visit:country_name", ["Germany"]]],
+    ]
+
+
+def test_behavioral_filters_wrap_an_event_filter() -> None:
+    """has_done and has_not_done take one event-dimension filter."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing")),
+            has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")),
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        ["has_done", ["is", "event:page", ["/pricing"]]],
+        ["has_not_done", ["is", "event:goal", ["Signup"]]],
+    ]
+
+
+def test_behavioral_filters_reject_visit_dimensions_and_nesting() -> None:
+    """The parser allows behavioral filters only on event dimensions, unnested."""
+    with pytest.raises(ValueError, match="event dimension"):
+        has_done(filter_clause(Dimension.VISIT_SOURCE, "is", "Google"))
+
+    inner = has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        has_not_done(inner)
+
+
+def test_logical_filters_require_two_clauses() -> None:
+    """A one-clause or is not the documented operator."""
+    with pytest.raises(ValueError, match="any_of"):
+        any_of(filter_clause(Dimension.EVENT_PAGE, "is", "/"))
+
+
+def test_event_property_dimension() -> None:
+    """Custom properties are dimensions named event:props:<property>."""
+    assert Dimension.event_property("author") == "event:props:author"
+    payload = (
+        QueryBuilder("example.com")
+        .dimensions(Dimension.event_property("author"))
+        .filter(Dimension.event_property("author"), "is", "Jane")
+        .build()
+    )
+
+    assert payload["dimensions"] == ["event:props:author"]
+    assert payload["filters"] == [["is", "event:props:author", ["Jane"]]]
+
+
+def test_event_property_rejects_a_full_dimension_name() -> None:
+    """The helper adds the prefix. Passing it twice would query the wrong property."""
+    with pytest.raises(ValueError, match="property name"):
+        Dimension.event_property("event:props:author")
 
 
 def test_documented_metric_and_dimension_names() -> None:
