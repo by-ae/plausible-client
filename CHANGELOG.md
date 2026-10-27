@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `QueryBuilder.where()` plus `filter_clause()`, `any_of()`, `all_of()`, and `negate()` for the Stats API `or`, `and`, and `not` filters. `has_done()` and `has_not_done()` build behavioral filters, which only accept an event dimension and cannot be nested
+- `Dimension.event_property()` for the documented `event:props:<name>` custom-property dimension
+- `send_event(cf_connecting_ip=...)` sets the `CF-Connecting-IP` header. The Events API uses that address instead of `X-Forwarded-For` when the header is present, which matters for requests that pass through Cloudflare
 - `PaymentRequiredError` exception for 402 Payment Required responses
 - `NotFoundError` for 404 responses and `ForbiddenError` for 403 responses, using the API `error` message when the body includes one
 - Events API `referrer` and `interactive` fields on `send_event()`
@@ -43,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stats API filters now use the clause types the query parser accepts. A single `visit:city` GeoName ID or `segment` id is sent as a one-element list of integers. String city or segment ids, integer clauses on other dimensions, and `visit:country` `is` / `is_not` values that are not 2 characters are rejected before the request
+- `QueryBuilder.date_range()` rejects naive datetimes and mixed date/datetime pairs. The Stats API accepts calendar dates or timestamps that include an offset, and a mixed pair matches neither form
 - Sites API deletion checks accept the boolean `true` the server returns, as well as the string `"true"` shown in the docs examples. `delete_site()`, `delete_goal()`, and `delete_guest()` no longer report failure after a successful delete
 - Goal ids from the Sites API are coerced to strings, matching the documented id format
 - 400 responses that use an `errors` object (Events API validation) include those details in `InvalidQueryError`

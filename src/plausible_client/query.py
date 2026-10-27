@@ -1,9 +1,36 @@
 """Query builder for Plausible Stats API v2."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
-from plausible_client.models import DateRange, Filter, OrderBy
+from plausible_client.models import DateRange, Filter, OrderBy, normalize_clauses
+
+
+def _require_query_date_pair(start: date, end: date) -> None:
+    """Reject ranges DateTime.from_iso8601 or the date-pair parser cannot read.
+
+    A custom range is either two calendar dates or two timezone-aware
+    datetimes. A naive datetime's ``isoformat()`` has no offset, and a mixed
+    pair matches neither parser.
+    """
+    start_is_datetime = isinstance(start, datetime)
+    end_is_datetime = isinstance(end, datetime)
+    if start_is_datetime != end_is_datetime:
+        raise TypeError("date_range() start and end must both be dates or both be datetimes")
+    if start_is_datetime:
+        _require_aware_datetime(start)
+        _require_aware_datetime(end)
+
+
+def _require_aware_datetime(value: date) -> None:
+    if isinstance(value, datetime):
+        offset = None if value.tzinfo is None else value.tzinfo.utcoffset(value)
+        if offset is None:
+            raise ValueError(
+                "datetime date ranges must be timezone-aware. "
+                "The Stats API rejects timestamps without an offset."
+            )
+
 
 # Presets accepted by the Stats API date_range field.
 # https://plausible.io/docs/stats-api
@@ -31,7 +58,7 @@ class QueryBuilder:
         self.site_id = site_id
         self._metrics: list[str] = []
         self._dimensions: list[str] = []
-        self._filters: list[list[str | list[str] | dict[str, bool]]] = []
+        self._filters: list[list[Any]] = []
         self._date_range: dict[str, Any] | None = None
         self._order_by: list[list[str]] = []
         self._limit: int = 10000
@@ -60,7 +87,7 @@ class QueryBuilder:
             "matches_not",
             "does_not_contain",
         ],
-        value: str | list[str],
+        value: str | int | list[str | int],
         *,
         case_sensitive: bool | None = None,
     ) -> "QueryBuilder":
@@ -70,11 +97,14 @@ class QueryBuilder:
         Args:
             dimension: The dimension to filter on
             operator: Filter operator (does_not_contain is deprecated, use contains_not)
-            value: Single value or list of values to filter by
+            value: Single value or list of values to filter by.
+                ``visit:city`` takes GeoName IDs as integers. ``segment`` takes
+                integer segment ids. Other dimensions take strings.
+                ``visit:country`` with ``is`` or ``is_not`` takes 2-letter codes.
             case_sensitive: Case-sensitivity modifier for ``is`` and ``contains``.
                 The Stats API only documents this modifier for those two operators.
         """
-        clauses = [value] if isinstance(value, str) else value
+        clauses = normalize_clauses(value)
         filter_obj = Filter(
             operator=operator,
             dimension=dimension,
@@ -84,6 +114,21 @@ class QueryBuilder:
         self._filters.append(filter_obj.to_dict())
         return self
 
+    def where(self, *expressions: list[Any]) -> "QueryBuilder":
+        """
+        Append logical or behavioral filter expressions.
+
+        Top-level filters are combined with an implicit ``and``. Build
+        expressions with ``filter_clause``, ``any_of``, ``all_of``,
+        ``negate``, ``has_done``, and ``has_not_done``.
+        """
+        if not expressions:
+            raise TypeError("where() requires at least one filter expression")
+        for expression in expressions:
+            _require_filter_expression(expression)
+            self._filters.append(expression)
+        return self
+
     def date_range(self, start_date: date | str, end_date: date | None = None) -> "QueryBuilder":
         """
         Set the date range for the query.
@@ -91,7 +136,8 @@ class QueryBuilder:
         The Stats API requires ``date_range``. Pass one documented preset
         (``"day"``, ``"24h"``, ``"7d"``, ``"28d"``, ``"30d"``, ``"91d"``,
         ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``) or a
-        start and end ``date`` or ``datetime``.
+        start and end ``date`` or timezone-aware ``datetime``. Naive
+        datetimes and mixed date/datetime pairs are rejected.
         """
         if isinstance(start_date, str):
             if end_date is not None:
@@ -107,6 +153,7 @@ class QueryBuilder:
         if end_date is None:
             raise TypeError("date_range() requires an end date when the start is a date")
 
+        _require_query_date_pair(start_date, end_date)
         date_range_obj = DateRange(start_date=start_date, end_date=end_date)
         self._date_range = date_range_obj.to_dict()
         return self
@@ -188,3 +235,78 @@ class QueryBuilder:
             payload["include"] = self._include
 
         return payload
+
+
+def filter_clause(
+    dimension: str,
+    operator: Literal[
+        "is",
+        "is_not",
+        "contains",
+        "contains_not",
+        "matches",
+        "matches_not",
+        "does_not_contain",
+    ],
+    value: str | int | list[str | int],
+    *,
+    case_sensitive: bool | None = None,
+) -> list[Any]:
+    """Build one simple filter without adding it to a query."""
+    return Filter(
+        operator=operator,
+        dimension=dimension,
+        clauses=normalize_clauses(value),
+        case_sensitive=case_sensitive,
+    ).to_dict()
+
+
+def all_of(*filters: list[Any]) -> list[Any]:
+    """Combine filters with ``and``. The result is ``["and", [filters...]]``."""
+    _require_combined_filters(filters, "all_of")
+    return ["and", list(filters)]
+
+
+def any_of(*filters: list[Any]) -> list[Any]:
+    """Combine filters with ``or``. The result is ``["or", [filters...]]``."""
+    _require_combined_filters(filters, "any_of")
+    return ["or", list(filters)]
+
+
+def negate(expression: list[Any]) -> list[Any]:
+    """Negate one filter. The result is ``["not", filter]``."""
+    _require_filter_expression(expression)
+    return ["not", expression]
+
+
+def has_done(expression: list[Any]) -> list[Any]:
+    """Keep sessions in which the event filter also matched."""
+    _require_event_filter(expression)
+    return ["has_done", expression]
+
+
+def has_not_done(expression: list[Any]) -> list[Any]:
+    """Drop sessions in which the event filter matched."""
+    _require_event_filter(expression)
+    return ["has_not_done", expression]
+
+
+def _require_combined_filters(filters: tuple[list[Any], ...], name: str) -> None:
+    if len(filters) < 2:
+        raise ValueError(f"{name}() requires at least two filters")
+    for expression in filters:
+        _require_filter_expression(expression)
+
+
+def _require_filter_expression(expression: list[Any]) -> None:
+    if not isinstance(expression, list) or not expression or not isinstance(expression[0], str):
+        raise TypeError("expected a Stats API filter expression")
+
+
+def _require_event_filter(expression: list[Any]) -> None:
+    _require_filter_expression(expression)
+    if expression[0] in ("has_done", "has_not_done"):
+        raise ValueError("Behavioral filters (has_done, has_not_done) cannot be nested.")
+    dimension = expression[1] if len(expression) > 1 else None
+    if not isinstance(dimension, str) or not dimension.startswith("event:"):
+        raise ValueError("has_done and has_not_done only accept an event dimension filter")

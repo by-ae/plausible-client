@@ -4,7 +4,17 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from plausible_client import Dimension, Metric, QueryBuilder
+from plausible_client import (
+    Dimension,
+    Metric,
+    QueryBuilder,
+    all_of,
+    any_of,
+    filter_clause,
+    has_done,
+    has_not_done,
+    negate,
+)
 
 
 def test_query_builder_basic() -> None:
@@ -81,6 +91,53 @@ def test_query_builder_filter_with_list() -> None:
     payload = query.build()
 
     assert payload["filters"][0][2] == ["US", "UK", "CA"]
+
+
+def test_city_filter_wraps_a_geoname_id() -> None:
+    """visit:city clauses are GeoName IDs, and a single id is still a list."""
+    payload = QueryBuilder("example.com").filter(Dimension.VISIT_CITY, "is", 4347778).build()
+
+    assert payload["filters"] == [["is", "visit:city", [4347778]]]
+
+
+def test_city_filter_rejects_string_ids() -> None:
+    """The Stats API parser accepts only integers for visit:city."""
+    with pytest.raises(ValueError, match="visit:city"):
+        QueryBuilder("example.com").filter(Dimension.VISIT_CITY, "is", "4347778")
+
+
+def test_segment_filter_uses_integer_ids() -> None:
+    """Segment filters are ["is", "segment", [<integer id>]]."""
+    payload = QueryBuilder("example.com").filter("segment", "is", 123).build()
+
+    assert payload["filters"] == [["is", "segment", [123]]]
+
+
+def test_segment_filter_rejects_string_ids() -> None:
+    """A string segment id is not a valid clause."""
+    with pytest.raises(ValueError, match="segment"):
+        QueryBuilder("example.com").filter("segment", "is", "123")
+
+
+def test_country_code_must_be_two_characters() -> None:
+    """is and is_not on visit:country require a 2-letter code."""
+    with pytest.raises(ValueError, match="visit:country"):
+        QueryBuilder("example.com").filter(Dimension.VISIT_COUNTRY, "is", "USA")
+
+
+def test_country_contains_keeps_longer_strings() -> None:
+    """The 2-letter check applies to is and is_not, not to contains."""
+    payload = (
+        QueryBuilder("example.com").filter(Dimension.VISIT_COUNTRY, "contains", "United").build()
+    )
+
+    assert payload["filters"] == [["contains", "visit:country", ["United"]]]
+
+
+def test_non_city_filter_rejects_integers() -> None:
+    """Other dimensions take strings. An int would be rejected by the parser."""
+    with pytest.raises(ValueError, match="visit:source"):
+        QueryBuilder("example.com").filter(Dimension.VISIT_SOURCE, "is", 1)
 
 
 def test_query_builder_with_date_range() -> None:
@@ -182,6 +239,24 @@ def test_query_builder_datetime_range() -> None:
     ]
 
 
+def test_naive_datetime_range_is_rejected() -> None:
+    """DateTime.from_iso8601 rejects timestamps that have no offset."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        QueryBuilder("example.com").date_range(
+            datetime(2024, 1, 1, 12, 0),
+            datetime(2024, 1, 1, 15, 0),
+        )
+
+
+def test_mixed_date_and_datetime_range_is_rejected() -> None:
+    """A pair must be two dates or two timestamps, not one of each."""
+    with pytest.raises(TypeError, match="both be dates or both be datetimes"):
+        QueryBuilder("example.com").date_range(
+            date(2024, 1, 1),
+            datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc),
+        )
+
+
 def test_query_builder_case_insensitive_filter() -> None:
     """is and contains accept the documented case_sensitive modifier."""
     payload = (
@@ -202,6 +277,109 @@ def test_query_builder_case_sensitive_rejected_for_other_operators() -> None:
         QueryBuilder("example.com").filter(
             Dimension.EVENT_PAGE, "matches", "^/user/", case_sensitive=False
         )
+
+
+def test_any_of_matches_the_documented_or_filter() -> None:
+    """or is ["or", [filter, filter]], as in the Stats API reference."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            any_of(
+                filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+                filter_clause(Dimension.VISIT_CITY_NAME, "is", "Tallinn"),
+            )
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        [
+            "or",
+            [
+                ["is", "visit:country_name", ["Germany"]],
+                ["is", "visit:city_name", ["Tallinn"]],
+            ],
+        ]
+    ]
+
+
+def test_all_of_and_negate_match_the_documented_forms() -> None:
+    """and and not use the shapes shown in the Stats API reference."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            all_of(
+                filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+                filter_clause(Dimension.VISIT_CITY_NAME, "is", "Berlin"),
+            ),
+            negate(filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany")),
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        [
+            "and",
+            [
+                ["is", "visit:country_name", ["Germany"]],
+                ["is", "visit:city_name", ["Berlin"]],
+            ],
+        ],
+        ["not", ["is", "visit:country_name", ["Germany"]]],
+    ]
+
+
+def test_behavioral_filters_wrap_an_event_filter() -> None:
+    """has_done and has_not_done take one event-dimension filter."""
+    payload = (
+        QueryBuilder("example.com")
+        .where(
+            has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing")),
+            has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")),
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        ["has_done", ["is", "event:page", ["/pricing"]]],
+        ["has_not_done", ["is", "event:goal", ["Signup"]]],
+    ]
+
+
+def test_behavioral_filters_reject_visit_dimensions_and_nesting() -> None:
+    """The parser allows behavioral filters only on event dimensions, unnested."""
+    with pytest.raises(ValueError, match="event dimension"):
+        has_done(filter_clause(Dimension.VISIT_SOURCE, "is", "Google"))
+
+    inner = has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        has_not_done(inner)
+
+
+def test_logical_filters_require_two_clauses() -> None:
+    """A one-clause or is not the documented operator."""
+    with pytest.raises(ValueError, match="any_of"):
+        any_of(filter_clause(Dimension.EVENT_PAGE, "is", "/"))
+
+
+def test_event_property_dimension() -> None:
+    """Custom properties are dimensions named event:props:<property>."""
+    assert Dimension.event_property("author") == "event:props:author"
+    payload = (
+        QueryBuilder("example.com")
+        .dimensions(Dimension.event_property("author"))
+        .filter(Dimension.event_property("author"), "is", "Jane")
+        .build()
+    )
+
+    assert payload["dimensions"] == ["event:props:author"]
+    assert payload["filters"] == [["is", "event:props:author", ["Jane"]]]
+
+
+def test_event_property_rejects_a_full_dimension_name() -> None:
+    """The helper adds the prefix. Passing it twice would query the wrong property."""
+    with pytest.raises(ValueError, match="property name"):
+        Dimension.event_property("event:props:author")
 
 
 def test_documented_metric_and_dimension_names() -> None:

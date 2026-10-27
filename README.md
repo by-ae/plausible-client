@@ -64,7 +64,7 @@ from plausible_client import AsyncClient, QueryBuilder, Metric
 
 async def get_stats():
     async with AsyncClient(api_key="your-api-key") as client:
-        query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
         result = await client.query(query)
         return result
 
@@ -110,6 +110,17 @@ client.send_event(
         "currency": "USD",
     },
     referrer="https://news.ycombinator.com/",
+)
+
+# Behind Cloudflare, also set CF-Connecting-IP to the visitor IP.
+# Plausible prefers that header over X-Forwarded-For, and a proxy IP
+# can cause the event to be dropped.
+client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/docs",
+    x_forwarded_for="203.0.113.5",
+    cf_connecting_ip="203.0.113.5",
 )
 
 # A non-interactive event is excluded from bounce-rate calculations.
@@ -201,7 +212,10 @@ query = (
     )
     # Filters with various operators
     .filter(Dimension.VISIT_SOURCE, "is", "Google")
-    .filter(Dimension.VISIT_COUNTRY, "is_not", ["US", "UK"])
+    # visit:country is and is_not take 2-letter codes. visit:city takes GeoName IDs.
+    .filter(Dimension.VISIT_COUNTRY, "is_not", ["US", "GB"])
+    .filter(Dimension.VISIT_CITY, "is", 4347778)
+    # Saved segments take an integer id: .filter("segment", "is", 123)
     .filter(Dimension.EVENT_PAGE, "contains", "/blog/")
     # Case-insensitive match (Stats API modifier for "is" and "contains")
     .filter(Dimension.VISIT_COUNTRY_NAME, "contains", "united", case_sensitive=False)
@@ -217,7 +231,36 @@ query = (
 )
 ```
 
-`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range can be two dates or two timezone-aware datetimes.
+`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
+
+Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
+
+```python
+from plausible_client import (
+    QueryBuilder,
+    Dimension,
+    Metric,
+    any_of,
+    filter_clause,
+    has_done,
+    has_not_done,
+)
+
+query = (
+    QueryBuilder("example.com")
+    .metrics(Metric.VISITORS)
+    .date_range("7d")
+    .dimensions(Dimension.event_property("author"))
+    .where(
+        any_of(
+            filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
+            filter_clause(Dimension.VISIT_CITY_NAME, "is", "Tallinn"),
+        ),
+        has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing")),
+        has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")),
+    )
+)
+```
 
 ### Automatic Pagination
 

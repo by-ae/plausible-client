@@ -22,6 +22,50 @@ class DateRange:
         }
 
 
+def normalize_clauses(value: str | int | list[str | int]) -> list[str | int]:
+    """Wrap a single clause the way the Stats API expects a list of clauses.
+
+    Booleans are rejected because ``bool`` is a subclass of ``int``.
+    """
+    if isinstance(value, bool):
+        raise TypeError("filter value must be a string, an integer, or a list of those")
+    if isinstance(value, (str, int)):
+        return [value]
+    if isinstance(value, list):
+        return list(value)
+    raise TypeError("filter value must be a string, an integer, or a list of those")
+
+
+def validate_clauses(dimension: str, operator: str, clauses: list[str | int]) -> None:
+    """Reject clause types the Stats API parser refuses.
+
+    ``visit:city`` clauses are GeoName IDs and ``segment`` clauses are integer
+    ids. Every other dimension takes strings. ``visit:country`` with ``is`` or
+    ``is_not`` additionally requires a 2-letter code.
+    """
+    if not clauses:
+        raise ValueError("filter clauses must not be empty")
+
+    if dimension == "visit:city":
+        if any(isinstance(clause, bool) or not isinstance(clause, int) for clause in clauses):
+            raise ValueError(
+                "visit:city filters require GeoName IDs as integers, for example 4347778"
+            )
+        return
+
+    if dimension == "segment":
+        if any(isinstance(clause, bool) or not isinstance(clause, int) for clause in clauses):
+            raise ValueError("segment filters require integer segment ids")
+        return
+
+    if any(not isinstance(clause, str) for clause in clauses):
+        raise ValueError(f"{dimension} filter clauses must be strings")
+
+    if dimension == "visit:country" and operator in ("is", "is_not"):
+        if any(not isinstance(clause, str) or len(clause) != 2 for clause in clauses):
+            raise ValueError("visit:country is and is_not filters require a 2-letter country code")
+
+
 @dataclass
 class Filter:
     """Filter for queries."""
@@ -36,10 +80,10 @@ class Filter:
         "does_not_contain",
     ]
     dimension: str
-    clauses: list[str]
+    clauses: list[str | int]
     case_sensitive: bool | None = None
 
-    def to_dict(self) -> list[str | list[str] | dict[str, bool]]:
+    def to_dict(self) -> list[str | list[str | int] | dict[str, bool]]:
         """
         Convert to API format: [operator, dimension, clauses] or
         [operator, dimension, clauses, {"case_sensitive": bool}].
@@ -50,7 +94,12 @@ class Filter:
         operator = self.operator
         if operator == "does_not_contain":
             operator = "contains_not"
-        result: list[str | list[str] | dict[str, bool]] = [operator, self.dimension, self.clauses]
+        validate_clauses(self.dimension, self.operator, self.clauses)
+        result: list[str | list[str | int] | dict[str, bool]] = [
+            operator,
+            self.dimension,
+            self.clauses,
+        ]
         if self.case_sensitive is not None:
             if operator not in ("is", "contains"):
                 raise ValueError("case_sensitive is only valid for 'is' and 'contains' filters")
@@ -124,6 +173,18 @@ class Dimension:
     TIME_DAY = "time:day"
     TIME_WEEK = "time:week"
     TIME_MONTH = "time:month"
+
+    @staticmethod
+    def event_property(name: str) -> str:
+        """Return the dimension name for a custom property.
+
+        The Stats API form is ``event:props:<custom_prop_name>``.
+        """
+        if not isinstance(name, str) or not name or name.startswith("event:"):
+            raise ValueError(
+                "event_property() expects a custom property name, for example 'author'"
+            )
+        return f"event:props:{name}"
 
 
 @dataclass(frozen=True)
