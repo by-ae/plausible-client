@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Any, Literal
 
-from plausible_client.models import DateRange, Filter, OrderBy
+from plausible_client.models import DateRange, Filter, OrderBy, normalize_clauses
 
 # Presets accepted by the Stats API date_range field.
 # https://plausible.io/docs/stats-api
@@ -31,7 +31,7 @@ class QueryBuilder:
         self.site_id = site_id
         self._metrics: list[str] = []
         self._dimensions: list[str] = []
-        self._filters: list[list[str | list[str] | dict[str, bool]]] = []
+        self._filters: list[list[str | list[str | int] | dict[str, bool]]] = []
         self._date_range: dict[str, Any] | None = None
         self._order_by: list[list[str]] = []
         self._limit: int = 10000
@@ -60,7 +60,7 @@ class QueryBuilder:
             "matches_not",
             "does_not_contain",
         ],
-        value: str | list[str],
+        value: str | int | list[str | int],
         *,
         case_sensitive: bool | None = None,
     ) -> "QueryBuilder":
@@ -70,11 +70,14 @@ class QueryBuilder:
         Args:
             dimension: The dimension to filter on
             operator: Filter operator (does_not_contain is deprecated, use contains_not)
-            value: Single value or list of values to filter by
+            value: Single value or list of values to filter by.
+                ``visit:city`` takes GeoName IDs as integers. ``segment`` takes
+                integer segment ids. Other dimensions take strings.
+                ``visit:country`` with ``is`` or ``is_not`` takes 2-letter codes.
             case_sensitive: Case-sensitivity modifier for ``is`` and ``contains``.
                 The Stats API only documents this modifier for those two operators.
         """
-        clauses = [value] if isinstance(value, str) else value
+        clauses = normalize_clauses(value)
         filter_obj = Filter(
             operator=operator,
             dimension=dimension,

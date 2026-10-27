@@ -201,7 +201,10 @@ query = (
     )
     # Filters with various operators
     .filter(Dimension.VISIT_SOURCE, "is", "Google")
-    .filter(Dimension.VISIT_COUNTRY, "is_not", ["US", "UK"])
+    # visit:country is and is_not take 2-letter codes. visit:city takes GeoName IDs.
+    .filter(Dimension.VISIT_COUNTRY, "is_not", ["US", "GB"])
+    .filter(Dimension.VISIT_CITY, "is", 4347778)
+    # Saved segments take an integer id: .filter("segment", "is", 123)
     .filter(Dimension.EVENT_PAGE, "contains", "/blog/")
     # Case-insensitive match (Stats API modifier for "is" and "contains")
     .filter(Dimension.VISIT_COUNTRY_NAME, "contains", "united", case_sensitive=False)
