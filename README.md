@@ -112,6 +112,17 @@ client.send_event(
     referrer="https://news.ycombinator.com/",
 )
 
+# Behind Cloudflare, also set CF-Connecting-IP to the visitor IP.
+# Plausible prefers that header over X-Forwarded-For, and a proxy IP
+# can cause the event to be dropped.
+client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/docs",
+    x_forwarded_for="203.0.113.5",
+    cf_connecting_ip="203.0.113.5",
+)
+
 # A non-interactive event is excluded from bounce-rate calculations.
 # HTTP 202 does not mean the event was recorded: check result.dropped.
 result = client.send_event(

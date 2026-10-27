@@ -140,6 +140,7 @@ class AsyncClient:
         revenue: dict[str, Any] | None = None,
         referrer: str | None = None,
         interactive: bool | None = None,
+        cf_connecting_ip: str | None = None,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -155,6 +156,10 @@ class AsyncClient:
             referrer: Referrer URL for this event (document.referrer for pageviews)
             interactive: Whether the event counts toward bounce rate.
                 Omit to let Plausible treat the event as interactive.
+            cf_connecting_ip: Visitor IP for the ``CF-Connecting-IP`` header.
+                Plausible uses this address instead of ``X-Forwarded-For`` when
+                the header is present. Set it when the request passes through
+                Cloudflare, which may otherwise fill the header with the proxy IP.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
@@ -173,6 +178,8 @@ class AsyncClient:
             headers["User-Agent"] = user_agent
         if x_forwarded_for:
             headers["X-Forwarded-For"] = x_forwarded_for
+        if cf_connecting_ip:
+            headers["CF-Connecting-IP"] = cf_connecting_ip
 
         payload: dict[str, Any] = {
             "domain": domain,
