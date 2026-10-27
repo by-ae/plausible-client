@@ -229,6 +229,24 @@ def test_query_builder_datetime_range() -> None:
     ]
 
 
+def test_naive_datetime_range_is_rejected() -> None:
+    """DateTime.from_iso8601 rejects timestamps that have no offset."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        QueryBuilder("example.com").date_range(
+            datetime(2024, 1, 1, 12, 0),
+            datetime(2024, 1, 1, 15, 0),
+        )
+
+
+def test_mixed_date_and_datetime_range_is_rejected() -> None:
+    """A pair must be two dates or two timestamps, not one of each."""
+    with pytest.raises(TypeError, match="both be dates or both be datetimes"):
+        QueryBuilder("example.com").date_range(
+            date(2024, 1, 1),
+            datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc),
+        )
+
+
 def test_query_builder_case_insensitive_filter() -> None:
     """is and contains accept the documented case_sensitive modifier."""
     payload = (

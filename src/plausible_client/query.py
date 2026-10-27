@@ -1,9 +1,36 @@
 """Query builder for Plausible Stats API v2."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from plausible_client.models import DateRange, Filter, OrderBy, normalize_clauses
+
+
+def _require_query_date_pair(start: date, end: date) -> None:
+    """Reject ranges DateTime.from_iso8601 or the date-pair parser cannot read.
+
+    A custom range is either two calendar dates or two timezone-aware
+    datetimes. A naive datetime's ``isoformat()`` has no offset, and a mixed
+    pair matches neither parser.
+    """
+    start_is_datetime = isinstance(start, datetime)
+    end_is_datetime = isinstance(end, datetime)
+    if start_is_datetime != end_is_datetime:
+        raise TypeError("date_range() start and end must both be dates or both be datetimes")
+    if start_is_datetime:
+        _require_aware_datetime(start)
+        _require_aware_datetime(end)
+
+
+def _require_aware_datetime(value: date) -> None:
+    if isinstance(value, datetime):
+        offset = None if value.tzinfo is None else value.tzinfo.utcoffset(value)
+        if offset is None:
+            raise ValueError(
+                "datetime date ranges must be timezone-aware. "
+                "The Stats API rejects timestamps without an offset."
+            )
+
 
 # Presets accepted by the Stats API date_range field.
 # https://plausible.io/docs/stats-api
@@ -94,7 +121,8 @@ class QueryBuilder:
         The Stats API requires ``date_range``. Pass one documented preset
         (``"day"``, ``"24h"``, ``"7d"``, ``"28d"``, ``"30d"``, ``"91d"``,
         ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``) or a
-        start and end ``date`` or ``datetime``.
+        start and end ``date`` or timezone-aware ``datetime``. Naive
+        datetimes and mixed date/datetime pairs are rejected.
         """
         if isinstance(start_date, str):
             if end_date is not None:
@@ -110,6 +138,7 @@ class QueryBuilder:
         if end_date is None:
             raise TypeError("date_range() requires an end date when the start is a date")
 
+        _require_query_date_pair(start_date, end_date)
         date_range_obj = DateRange(start_date=start_date, end_date=end_date)
         self._date_range = date_range_obj.to_dict()
         return self

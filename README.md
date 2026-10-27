@@ -64,7 +64,7 @@ from plausible_client import AsyncClient, QueryBuilder, Metric
 
 async def get_stats():
     async with AsyncClient(api_key="your-api-key") as client:
-        query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+        query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
         result = await client.query(query)
         return result
 
@@ -220,7 +220,7 @@ query = (
 )
 ```
 
-`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range can be two dates or two timezone-aware datetimes.
+`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
 
 ### Automatic Pagination
 
