@@ -124,6 +124,8 @@ client.send_event(
 )
 
 # A non-interactive event is excluded from bounce-rate calculations.
+# This applies to custom events. pageview and other system events stay
+# interactive, and interactive=False is rejected for those names.
 # HTTP 202 does not mean the event was recorded: check result.dropped.
 result = client.send_event(
     domain="example.com",
@@ -134,6 +136,8 @@ result = client.send_event(
 if result.dropped:
     print("Event was dropped (see the x-plausible-dropped response header)")
 ```
+
+`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
 ### Sites API - Managing Sites Programmatically
 
@@ -226,14 +230,17 @@ query = (
     # Pagination
     .limit(50)
     .offset(0)
-    # Include options
-    .include(imports=True, time_labels=True, total_rows=True)
+    # Include options. trim_relative_date_range drops empty time after
+    # the current moment for "day", "month", and "year" ranges.
+    .include(imports=True, time_labels=True, total_rows=True, trim_relative_date_range=True)
 )
 ```
 
-`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
+`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A relative range is also accepted: `"14d"` means the last 1 to 5000 days, and `"3mo"` means the last 1 to 100 months. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
 
 Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
+
+`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique.
 
 ```python
 from plausible_client import (
@@ -352,6 +359,7 @@ Dimension.VISIT_UTM_CONTENT
 Dimension.VISIT_UTM_TERM
 
 # Technology dimensions
+Dimension.VISIT_SCREEN
 Dimension.VISIT_DEVICE
 Dimension.VISIT_BROWSER
 Dimension.VISIT_BROWSER_VERSION

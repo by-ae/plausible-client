@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from plausible_client._events import validate_event
 from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_sync
 from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
@@ -151,11 +152,16 @@ class Client:
             url: Full URL where the event occurred
             user_agent: User-Agent header from the visitor (recommended)
             x_forwarded_for: X-Forwarded-For header for visitor IP (recommended)
-            props: Custom properties (max 30 properties)
+            props: Custom properties. The API stores at most 30 and discards
+                the rest. Keys are limited to 300 bytes and values to 2000
+                bytes. Blank values are discarded.
             revenue: Revenue data with amount and currency
             referrer: Referrer URL for this event (document.referrer for pageviews)
             interactive: Whether the event counts toward bounce rate.
                 Omit to let Plausible treat the event as interactive.
+                ``False`` is only honoured for custom events. System events
+                such as ``pageview`` stay interactive, and passing ``False``
+                for those names is rejected.
             cf_connecting_ip: Visitor IP for the ``CF-Connecting-IP`` header.
                 Plausible uses this address instead of ``X-Forwarded-For`` when
                 the header is present. Set it when the request passes through
@@ -172,7 +178,15 @@ class Client:
             InvalidQueryError: If the event data is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
+            ValueError: If the payload would be rejected or ignored by ingestion
         """
+        validate_event(
+            domain=domain,
+            name=name,
+            url=url,
+            interactive=interactive,
+            props=props,
+        )
         headers: dict[str, str] = {}
         if user_agent:
             headers["User-Agent"] = user_agent

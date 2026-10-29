@@ -215,6 +215,41 @@ def test_query_builder_unknown_date_preset() -> None:
         QueryBuilder("example.com").date_range("fortnight")
 
 
+@pytest.mark.parametrize("preset", ["1d", "14d", "5000d", "1mo", "3mo", "100mo"])
+def test_query_builder_relative_date_range(preset: str) -> None:
+    """The parser accepts <n>d (1 to 5000) and <n>mo (1 to 100)."""
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(preset).build()
+
+    assert payload["date_range"] == preset
+
+
+def test_include_trim_relative_date_range() -> None:
+    """trim_relative_date_range is an include flag for day, month, and year."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("day")
+        .include(trim_relative_date_range=True)
+        .build()
+    )
+
+    assert payload["include"] == {"trim_relative_date_range": True}
+
+
+def test_include_omits_trim_relative_date_range_by_default() -> None:
+    """The flag stays off unless the caller asks for it."""
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).include(total_rows=True).build()
+
+    assert payload["include"] == {"total_rows": True}
+
+
+@pytest.mark.parametrize("preset", ["0d", "5001d", "0mo", "101mo"])
+def test_query_builder_relative_date_range_out_of_bounds(preset: str) -> None:
+    """Numbers outside the parser guards are rejected locally."""
+    with pytest.raises(ValueError, match="outside the Stats API limits"):
+        QueryBuilder("example.com").date_range(preset)
+
+
 def test_query_builder_preset_rejects_end_date() -> None:
     """A preset does not combine with an end date."""
     with pytest.raises(TypeError):
@@ -382,6 +417,58 @@ def test_event_property_rejects_a_full_dimension_name() -> None:
         Dimension.event_property("event:props:author")
 
 
+def test_time_dimensions_are_rejected_in_filters() -> None:
+    """Time buckets are not filter dimensions. date_range selects the period."""
+    with pytest.raises(ValueError, match="time dimensions"):
+        QueryBuilder("example.com").filter(Dimension.TIME_DAY, "is", "2024-01-01")
+
+
+def test_event_goal_filter_operators() -> None:
+    """The schema allows is and contains on event:goal, and nothing else."""
+    payload = QueryBuilder("example.com").filter(Dimension.EVENT_GOAL, "contains", "Signup").build()
+    assert payload["filters"] == [["contains", "event:goal", ["Signup"]]]
+
+    with pytest.raises(ValueError, match="event:goal"):
+        filter_clause(Dimension.EVENT_GOAL, "is_not", "Signup")
+
+
+def test_segment_filter_only_accepts_is() -> None:
+    """segment is only valid with the is operator."""
+    with pytest.raises(ValueError, match="segment"):
+        QueryBuilder("example.com").filter("segment", "contains", 123)
+
+
+def test_order_by_rejects_event_goal_and_segment() -> None:
+    """Those values are not in the order_by schema."""
+    with pytest.raises(ValueError, match="event:goal"):
+        QueryBuilder("example.com").order_by(Dimension.EVENT_GOAL)
+    with pytest.raises(ValueError, match="segment"):
+        QueryBuilder("example.com").order_by("segment")
+
+
+def test_pagination_bounds() -> None:
+    """limit is 1 to 10000 and offset cannot be negative."""
+    with pytest.raises(ValueError, match="limit"):
+        QueryBuilder("example.com").limit(0)
+    with pytest.raises(ValueError, match="limit"):
+        QueryBuilder("example.com").limit(10001)
+    with pytest.raises(ValueError, match="offset"):
+        QueryBuilder("example.com").offset(-1)
+
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).limit(10000).offset(0).build()
+    assert "pagination" not in payload
+
+
+def test_duplicate_metrics_and_dimensions_are_rejected() -> None:
+    """The query schema requires unique metrics and dimensions."""
+    with pytest.raises(ValueError, match="duplicate metric"):
+        QueryBuilder("example.com").metrics(Metric.VISITORS, Metric.VISITORS)
+    with pytest.raises(ValueError, match="duplicate dimension"):
+        QueryBuilder("example.com").dimensions(Dimension.EVENT_PAGE).dimensions(
+            Dimension.EVENT_PAGE
+        )
+
+
 def test_documented_metric_and_dimension_names() -> None:
     """Constants match the Stats API metric and dimension names."""
     assert Metric.SCROLL_DEPTH == "scroll_depth"
@@ -398,6 +485,7 @@ def test_documented_metric_and_dimension_names() -> None:
     assert Dimension.VISIT_COUNTRY_NAME == "visit:country_name"
     assert Dimension.VISIT_REGION_NAME == "visit:region_name"
     assert Dimension.VISIT_CITY_NAME == "visit:city_name"
+    assert Dimension.VISIT_SCREEN == "visit:screen"
     assert Dimension.TIME == "time"
     assert Dimension.TIME_HOUR == "time:hour"
     assert Dimension.TIME_DAY == "time:day"

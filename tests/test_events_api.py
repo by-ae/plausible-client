@@ -161,3 +161,95 @@ async def test_async_send_event_referrer_and_dropped() -> None:
     assert body["referrer"] == "https://example.com/blog"
     assert body["interactive"] is False
     await client.close()
+
+
+def test_send_event_rejects_values_the_parser_drops() -> None:
+    """Ingestion returns 400 for these payloads, or ignores interactive=false."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="domain"):
+        client.send_event(domain="  ", name="pageview", url="https://example.com/")
+    with pytest.raises(ValueError, match="name is required"):
+        client.send_event(domain="example.com", name="", url="https://example.com/")
+    with pytest.raises(ValueError, match="120"):
+        client.send_event(domain="example.com", name="n" * 121, url="https://example.com/")
+    with pytest.raises(ValueError, match="2000"):
+        client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="https://example.com/" + "a" * 2000,
+        )
+    with pytest.raises(ValueError, match="data:"):
+        client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="DATA:text/html,hi",
+        )
+    with pytest.raises(ValueError, match="pageview"):
+        client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="https://example.com/",
+            interactive=False,
+        )
+    with pytest.raises(ValueError, match="File Download"):
+        client.send_event(
+            domain="example.com",
+            name="File Download",
+            url="https://example.com/file",
+            interactive=False,
+        )
+    with pytest.raises(ValueError, match="300 bytes"):
+        client.send_event(
+            domain="example.com",
+            name="signup",
+            url="https://example.com/",
+            props={"é" * 151: "ok"},
+        )
+    with pytest.raises(ValueError, match="2000 bytes"):
+        client.send_event(
+            domain="example.com",
+            name="signup",
+            url="https://example.com/",
+            props={"plan": "x" * 2001},
+        )
+
+
+@respx.mock
+def test_send_event_accepts_parser_limits() -> None:
+    """Values at the documented limits are still sent."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+    prefix = "https://example.com/"
+    url = prefix + "a" * (2000 - len(prefix.encode()))
+    assert len(url.encode()) == 2000
+
+    client = Client(api_key="test-key")
+    client.send_event(
+        domain="example.com",
+        name="n" * 120,
+        url=url,
+        props={"k" * 300: "v" * 2000, "flag": False},
+        interactive=True,
+    )
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["name"] == "n" * 120
+    assert body["url"] == url
+    assert body["interactive"] is True
+    assert body["props"]["flag"] is False
+
+
+@pytest.mark.asyncio
+async def test_async_send_event_rejects_noninteractive_pageview() -> None:
+    """The async client applies the same ingestion checks."""
+    client = AsyncClient(api_key="test-key")
+    with pytest.raises(ValueError, match="pageview"):
+        await client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="https://example.com/",
+            interactive=False,
+        )
+    await client.close()

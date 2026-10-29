@@ -36,6 +36,20 @@ def normalize_clauses(value: str | int | list[str | int]) -> list[str | int]:
     raise TypeError("filter value must be a string, an integer, or a list of those")
 
 
+def validate_filter_target(dimension: str, operator: str) -> None:
+    """Reject filter targets the public query schema does not allow.
+
+    Time dimensions are not filterable. ``event:goal`` accepts only ``is``
+    and ``contains``. ``segment`` accepts only ``is``.
+    """
+    if dimension == "time" or dimension.startswith("time:"):
+        raise ValueError("time dimensions cannot be used in filters. Set date_range instead.")
+    if dimension == "event:goal" and operator not in ("is", "contains"):
+        raise ValueError("event:goal filters only accept the 'is' and 'contains' operators")
+    if dimension == "segment" and operator != "is":
+        raise ValueError("segment filters only accept the 'is' operator")
+
+
 def validate_clauses(dimension: str, operator: str, clauses: list[str | int]) -> None:
     """Reject clause types the Stats API parser refuses.
 
@@ -91,10 +105,11 @@ class Filter:
         Maps deprecated 'does_not_contain' to 'contains_not' for API compatibility.
         The case_sensitive modifier is documented for ``is`` and ``contains`` only.
         """
+        validate_filter_target(self.dimension, self.operator)
         operator = self.operator
         if operator == "does_not_contain":
             operator = "contains_not"
-        validate_clauses(self.dimension, self.operator, self.clauses)
+        validate_clauses(self.dimension, operator, self.clauses)
         result: list[str | list[str | int] | dict[str, bool]] = [
             operator,
             self.dimension,
@@ -157,6 +172,7 @@ class Dimension:
     VISIT_UTM_CAMPAIGN = "visit:utm_campaign"
     VISIT_UTM_CONTENT = "visit:utm_content"
     VISIT_UTM_TERM = "visit:utm_term"
+    VISIT_SCREEN = "visit:screen"
     VISIT_DEVICE = "visit:device"
     VISIT_BROWSER = "visit:browser"
     VISIT_BROWSER_VERSION = "visit:browser_version"

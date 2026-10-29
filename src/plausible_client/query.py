@@ -32,7 +32,7 @@ def _require_aware_datetime(value: date) -> None:
             )
 
 
-# Presets accepted by the Stats API date_range field.
+# Named presets accepted by the Stats API date_range field.
 # https://plausible.io/docs/stats-api
 DATE_RANGE_PRESETS = frozenset(
     {
@@ -49,6 +49,11 @@ DATE_RANGE_PRESETS = frozenset(
         "all",
     }
 )
+
+# The query parser also accepts "<n>d" and "<n>mo" relative ranges.
+# Bounds match Plausible.Stats.ApiQueryParser.parse_input_date_range/1.
+MAX_RELATIVE_DAYS = 5000
+MAX_RELATIVE_MONTHS = 100
 
 
 class QueryBuilder:
@@ -67,11 +72,13 @@ class QueryBuilder:
 
     def metrics(self, *metrics: str) -> "QueryBuilder":
         """Add metrics to the query."""
+        _reject_duplicates(self._metrics, metrics, "metric")
         self._metrics.extend(metrics)
         return self
 
     def dimensions(self, *dimensions: str) -> "QueryBuilder":
         """Add dimensions to the query."""
+        _reject_duplicates(self._dimensions, dimensions, "dimension")
         self._dimensions.extend(dimensions)
         return self
 
@@ -135,17 +142,21 @@ class QueryBuilder:
 
         The Stats API requires ``date_range``. Pass one documented preset
         (``"day"``, ``"24h"``, ``"7d"``, ``"28d"``, ``"30d"``, ``"91d"``,
-        ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``) or a
-        start and end ``date`` or timezone-aware ``datetime``. Naive
-        datetimes and mixed date/datetime pairs are rejected.
+        ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``), a
+        relative range (``"14d"`` for 1 to 5000 days, ``"3mo"`` for 1 to
+        100 months), or a start and end ``date`` or timezone-aware
+        ``datetime``. Naive datetimes and mixed date/datetime pairs are
+        rejected.
         """
         if isinstance(start_date, str):
             if end_date is not None:
                 raise TypeError("preset date ranges do not take an end date")
-            if start_date not in DATE_RANGE_PRESETS:
+            if start_date not in DATE_RANGE_PRESETS and not _is_relative_date_range(start_date):
                 presets = ", ".join(sorted(DATE_RANGE_PRESETS))
                 raise ValueError(
-                    f"unknown date range preset {start_date!r}. Expected one of: {presets}"
+                    f"unknown date range preset {start_date!r}. "
+                    f"Expected one of: {presets}, or a relative range such as "
+                    f"'14d' (1 to {MAX_RELATIVE_DAYS}) or '3mo' (1 to {MAX_RELATIVE_MONTHS})"
                 )
             self._date_range = {"date_range": start_date}
             return self
@@ -160,17 +171,29 @@ class QueryBuilder:
 
     def order_by(self, metric: str, direction: Literal["asc", "desc"] = "desc") -> "QueryBuilder":
         """Add ordering to the query."""
+        if metric == "event:goal":
+            raise ValueError(
+                "event:goal cannot be used in order_by. Order goal breakdowns by a metric instead."
+            )
+        if metric == "segment":
+            raise ValueError("segment cannot be used in order_by")
         order_obj = OrderBy(metric=metric, direction=direction)
         self._order_by.append(order_obj.to_list())
         return self
 
     def limit(self, limit: int) -> "QueryBuilder":
-        """Set the result limit."""
+        """Set the result limit. The query schema allows 1 to 10000."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 10000:
+            raise ValueError(f"limit must be an integer from 1 to 10000, got {limit!r}")
         self._limit = limit
         return self
 
     def offset(self, offset: int) -> "QueryBuilder":
-        """Set the result offset for pagination."""
+        """Set the result offset for pagination. The query schema requires zero or greater."""
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError(
+                f"offset must be an integer greater than or equal to 0, got {offset!r}"
+            )
         self._offset = offset
         return self
 
@@ -179,6 +202,7 @@ class QueryBuilder:
         imports: bool = False,
         time_labels: bool = False,
         total_rows: bool = False,
+        trim_relative_date_range: bool = False,
     ) -> "QueryBuilder":
         """
         Set include options for additional data.
@@ -187,6 +211,8 @@ class QueryBuilder:
             imports: Try to include imported data in the result
             time_labels: Include all time labels valid for the date range (requires time dimension)
             total_rows: Include total row count for pagination
+            trim_relative_date_range: Drop empty time after the current moment for
+                ``day``, ``month``, and ``year`` date ranges
         """
         if imports:
             self._include["imports"] = True
@@ -194,6 +220,8 @@ class QueryBuilder:
             self._include["time_labels"] = True
         if total_rows:
             self._include["total_rows"] = True
+        if trim_relative_date_range:
+            self._include["trim_relative_date_range"] = True
         return self
 
     def copy(self) -> "QueryBuilder":
@@ -289,6 +317,44 @@ def has_not_done(expression: list[Any]) -> list[Any]:
     """Drop sessions in which the event filter matched."""
     _require_event_filter(expression)
     return ["has_not_done", expression]
+
+
+def _reject_duplicates(existing: list[str], incoming: tuple[str, ...], label: str) -> None:
+    """The query schema requires metrics and dimensions to be unique."""
+    seen = set(existing)
+    for value in incoming:
+        if value in seen:
+            raise ValueError(f"duplicate {label} {value!r}")
+        seen.add(value)
+
+
+def _is_relative_date_range(value: str) -> bool:
+    """Return whether ``value`` is an ``<n>d`` or ``<n>mo`` range the parser accepts.
+
+    Out-of-range numbers raise, because the parser rejects them after the
+    string matches the shorthand pattern.
+    """
+    if value.endswith("mo"):
+        count_text = value[:-2]
+        upper = MAX_RELATIVE_MONTHS
+        unit = "month"
+    elif value.endswith("d"):
+        count_text = value[:-1]
+        upper = MAX_RELATIVE_DAYS
+        unit = "day"
+    else:
+        return False
+
+    if not count_text.isdigit():
+        return False
+
+    count = int(count_text)
+    if 1 <= count <= upper:
+        return True
+    raise ValueError(
+        f"date range {value!r} is outside the Stats API limits. "
+        f"A {unit} range must be from 1 to {upper}."
+    )
 
 
 def _require_combined_filters(filters: tuple[list[Any], ...], name: str) -> None:
