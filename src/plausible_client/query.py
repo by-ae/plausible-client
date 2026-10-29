@@ -32,7 +32,7 @@ def _require_aware_datetime(value: date) -> None:
             )
 
 
-# Presets accepted by the Stats API date_range field.
+# Named presets accepted by the Stats API date_range field.
 # https://plausible.io/docs/stats-api
 DATE_RANGE_PRESETS = frozenset(
     {
@@ -49,6 +49,11 @@ DATE_RANGE_PRESETS = frozenset(
         "all",
     }
 )
+
+# The query parser also accepts "<n>d" and "<n>mo" relative ranges.
+# Bounds match Plausible.Stats.ApiQueryParser.parse_input_date_range/1.
+MAX_RELATIVE_DAYS = 5000
+MAX_RELATIVE_MONTHS = 100
 
 
 class QueryBuilder:
@@ -135,17 +140,21 @@ class QueryBuilder:
 
         The Stats API requires ``date_range``. Pass one documented preset
         (``"day"``, ``"24h"``, ``"7d"``, ``"28d"``, ``"30d"``, ``"91d"``,
-        ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``) or a
-        start and end ``date`` or timezone-aware ``datetime``. Naive
-        datetimes and mixed date/datetime pairs are rejected.
+        ``"month"``, ``"6mo"``, ``"12mo"``, ``"year"``, ``"all"``), a
+        relative range (``"14d"`` for 1 to 5000 days, ``"3mo"`` for 1 to
+        100 months), or a start and end ``date`` or timezone-aware
+        ``datetime``. Naive datetimes and mixed date/datetime pairs are
+        rejected.
         """
         if isinstance(start_date, str):
             if end_date is not None:
                 raise TypeError("preset date ranges do not take an end date")
-            if start_date not in DATE_RANGE_PRESETS:
+            if start_date not in DATE_RANGE_PRESETS and not _is_relative_date_range(start_date):
                 presets = ", ".join(sorted(DATE_RANGE_PRESETS))
                 raise ValueError(
-                    f"unknown date range preset {start_date!r}. Expected one of: {presets}"
+                    f"unknown date range preset {start_date!r}. "
+                    f"Expected one of: {presets}, or a relative range such as "
+                    f"'14d' (1 to {MAX_RELATIVE_DAYS}) or '3mo' (1 to {MAX_RELATIVE_MONTHS})"
                 )
             self._date_range = {"date_range": start_date}
             return self
@@ -289,6 +298,35 @@ def has_not_done(expression: list[Any]) -> list[Any]:
     """Drop sessions in which the event filter matched."""
     _require_event_filter(expression)
     return ["has_not_done", expression]
+
+
+def _is_relative_date_range(value: str) -> bool:
+    """Return whether ``value`` is an ``<n>d`` or ``<n>mo`` range the parser accepts.
+
+    Out-of-range numbers raise, because the parser rejects them after the
+    string matches the shorthand pattern.
+    """
+    if value.endswith("mo"):
+        count_text = value[:-2]
+        upper = MAX_RELATIVE_MONTHS
+        unit = "month"
+    elif value.endswith("d"):
+        count_text = value[:-1]
+        upper = MAX_RELATIVE_DAYS
+        unit = "day"
+    else:
+        return False
+
+    if not count_text.isdigit():
+        return False
+
+    count = int(count_text)
+    if 1 <= count <= upper:
+        return True
+    raise ValueError(
+        f"date range {value!r} is outside the Stats API limits. "
+        f"A {unit} range must be from 1 to {upper}."
+    )
 
 
 def _require_combined_filters(filters: tuple[list[Any], ...], name: str) -> None:

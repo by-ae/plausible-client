@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QueryBuilder.date_range()` accepts relative ranges such as `"14d"` and `"3mo"`. The Stats API parser allows 1 to 5000 days and 1 to 100 months. Values outside those bounds are rejected before the request
 - Stats API filters now use the clause types the query parser accepts. A single `visit:city` GeoName ID or `segment` id is sent as a one-element list of integers. String city or segment ids, integer clauses on other dimensions, and `visit:country` `is` / `is_not` values that are not 2 characters are rejected before the request
 - `QueryBuilder.date_range()` rejects naive datetimes and mixed date/datetime pairs. The Stats API accepts calendar dates or timestamps that include an offset, and a mixed pair matches neither form
 - Sites API deletion checks accept the boolean `true` the server returns, as well as the string `"true"` shown in the docs examples. `delete_site()`, `delete_goal()`, and `delete_guest()` no longer report failure after a successful delete

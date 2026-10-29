@@ -215,6 +215,21 @@ def test_query_builder_unknown_date_preset() -> None:
         QueryBuilder("example.com").date_range("fortnight")
 
 
+@pytest.mark.parametrize("preset", ["1d", "14d", "5000d", "1mo", "3mo", "100mo"])
+def test_query_builder_relative_date_range(preset: str) -> None:
+    """The parser accepts <n>d (1 to 5000) and <n>mo (1 to 100)."""
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range(preset).build()
+
+    assert payload["date_range"] == preset
+
+
+@pytest.mark.parametrize("preset", ["0d", "5001d", "0mo", "101mo"])
+def test_query_builder_relative_date_range_out_of_bounds(preset: str) -> None:
+    """Numbers outside the parser guards are rejected locally."""
+    with pytest.raises(ValueError, match="outside the Stats API limits"):
+        QueryBuilder("example.com").date_range(preset)
+
+
 def test_query_builder_preset_rejects_end_date() -> None:
     """A preset does not combine with an end date."""
     with pytest.raises(TypeError):
