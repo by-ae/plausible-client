@@ -72,11 +72,13 @@ class QueryBuilder:
 
     def metrics(self, *metrics: str) -> "QueryBuilder":
         """Add metrics to the query."""
+        _reject_duplicates(self._metrics, metrics, "metric")
         self._metrics.extend(metrics)
         return self
 
     def dimensions(self, *dimensions: str) -> "QueryBuilder":
         """Add dimensions to the query."""
+        _reject_duplicates(self._dimensions, dimensions, "dimension")
         self._dimensions.extend(dimensions)
         return self
 
@@ -169,17 +171,29 @@ class QueryBuilder:
 
     def order_by(self, metric: str, direction: Literal["asc", "desc"] = "desc") -> "QueryBuilder":
         """Add ordering to the query."""
+        if metric == "event:goal":
+            raise ValueError(
+                "event:goal cannot be used in order_by. Order goal breakdowns by a metric instead."
+            )
+        if metric == "segment":
+            raise ValueError("segment cannot be used in order_by")
         order_obj = OrderBy(metric=metric, direction=direction)
         self._order_by.append(order_obj.to_list())
         return self
 
     def limit(self, limit: int) -> "QueryBuilder":
-        """Set the result limit."""
+        """Set the result limit. The query schema allows 1 to 10000."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 10000:
+            raise ValueError(f"limit must be an integer from 1 to 10000, got {limit!r}")
         self._limit = limit
         return self
 
     def offset(self, offset: int) -> "QueryBuilder":
-        """Set the result offset for pagination."""
+        """Set the result offset for pagination. The query schema requires zero or greater."""
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError(
+                f"offset must be an integer greater than or equal to 0, got {offset!r}"
+            )
         self._offset = offset
         return self
 
@@ -303,6 +317,15 @@ def has_not_done(expression: list[Any]) -> list[Any]:
     """Drop sessions in which the event filter matched."""
     _require_event_filter(expression)
     return ["has_not_done", expression]
+
+
+def _reject_duplicates(existing: list[str], incoming: tuple[str, ...], label: str) -> None:
+    """The query schema requires metrics and dimensions to be unique."""
+    seen = set(existing)
+    for value in incoming:
+        if value in seen:
+            raise ValueError(f"duplicate {label} {value!r}")
+        seen.add(value)
 
 
 def _is_relative_date_range(value: str) -> bool:

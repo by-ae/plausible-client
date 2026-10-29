@@ -236,6 +236,8 @@ query = (
 
 Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
 
+`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique.
+
 ```python
 from plausible_client import (
     QueryBuilder,

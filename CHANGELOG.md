@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Time dimensions are rejected in filters. `event:goal` filters only accept `is` and `contains`, and `segment` filters only accept `is`. `order_by` rejects `event:goal` and `segment`. `limit()` must be from 1 to 10000, `offset()` must be zero or greater, and duplicate metrics or dimensions are rejected. The query schema refuses those payloads
 - `QueryBuilder.date_range()` accepts relative ranges such as `"14d"` and `"3mo"`. The Stats API parser allows 1 to 5000 days and 1 to 100 months. Values outside those bounds are rejected before the request
 - Stats API filters now use the clause types the query parser accepts. A single `visit:city` GeoName ID or `segment` id is sent as a one-element list of integers. String city or segment ids, integer clauses on other dimensions, and `visit:country` `is` / `is_not` values that are not 2 characters are rejected before the request
 - `QueryBuilder.date_range()` rejects naive datetimes and mixed date/datetime pairs. The Stats API accepts calendar dates or timestamps that include an offset, and a mixed pair matches neither form
