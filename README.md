@@ -124,6 +124,8 @@ client.send_event(
 )
 
 # A non-interactive event is excluded from bounce-rate calculations.
+# This applies to custom events. pageview and other system events stay
+# interactive, and interactive=False is rejected for those names.
 # HTTP 202 does not mean the event was recorded: check result.dropped.
 result = client.send_event(
     domain="example.com",
@@ -134,6 +136,8 @@ result = client.send_event(
 if result.dropped:
     print("Event was dropped (see the x-plausible-dropped response header)")
 ```
+
+`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
 ### Sites API - Managing Sites Programmatically
 
