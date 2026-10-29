@@ -226,8 +226,9 @@ query = (
     # Pagination
     .limit(50)
     .offset(0)
-    # Include options
-    .include(imports=True, time_labels=True, total_rows=True)
+    # Include options. trim_relative_date_range drops empty time after
+    # the current moment for "day", "month", and "year" ranges.
+    .include(imports=True, time_labels=True, total_rows=True, trim_relative_date_range=True)
 )
 ```
 
@@ -352,6 +353,7 @@ Dimension.VISIT_UTM_CONTENT
 Dimension.VISIT_UTM_TERM
 
 # Technology dimensions
+Dimension.VISIT_SCREEN
 Dimension.VISIT_DEVICE
 Dimension.VISIT_BROWSER
 Dimension.VISIT_BROWSER_VERSION

@@ -223,6 +223,26 @@ def test_query_builder_relative_date_range(preset: str) -> None:
     assert payload["date_range"] == preset
 
 
+def test_include_trim_relative_date_range() -> None:
+    """trim_relative_date_range is an include flag for day, month, and year."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("day")
+        .include(trim_relative_date_range=True)
+        .build()
+    )
+
+    assert payload["include"] == {"trim_relative_date_range": True}
+
+
+def test_include_omits_trim_relative_date_range_by_default() -> None:
+    """The flag stays off unless the caller asks for it."""
+    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).include(total_rows=True).build()
+
+    assert payload["include"] == {"total_rows": True}
+
+
 @pytest.mark.parametrize("preset", ["0d", "5001d", "0mo", "101mo"])
 def test_query_builder_relative_date_range_out_of_bounds(preset: str) -> None:
     """Numbers outside the parser guards are rejected locally."""
@@ -413,6 +433,7 @@ def test_documented_metric_and_dimension_names() -> None:
     assert Dimension.VISIT_COUNTRY_NAME == "visit:country_name"
     assert Dimension.VISIT_REGION_NAME == "visit:region_name"
     assert Dimension.VISIT_CITY_NAME == "visit:city_name"
+    assert Dimension.VISIT_SCREEN == "visit:screen"
     assert Dimension.TIME == "time"
     assert Dimension.TIME_HOUR == "time:hour"
     assert Dimension.TIME_DAY == "time:day"

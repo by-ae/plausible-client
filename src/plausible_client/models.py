@@ -157,6 +157,7 @@ class Dimension:
     VISIT_UTM_CAMPAIGN = "visit:utm_campaign"
     VISIT_UTM_CONTENT = "visit:utm_content"
     VISIT_UTM_TERM = "visit:utm_term"
+    VISIT_SCREEN = "visit:screen"
     VISIT_DEVICE = "visit:device"
     VISIT_BROWSER = "visit:browser"
     VISIT_BROWSER_VERSION = "visit:browser_version"

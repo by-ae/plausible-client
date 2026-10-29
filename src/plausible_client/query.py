@@ -188,6 +188,7 @@ class QueryBuilder:
         imports: bool = False,
         time_labels: bool = False,
         total_rows: bool = False,
+        trim_relative_date_range: bool = False,
     ) -> "QueryBuilder":
         """
         Set include options for additional data.
@@ -196,6 +197,8 @@ class QueryBuilder:
             imports: Try to include imported data in the result
             time_labels: Include all time labels valid for the date range (requires time dimension)
             total_rows: Include total row count for pagination
+            trim_relative_date_range: Drop empty time after the current moment for
+                ``day``, ``month``, and ``year`` date ranges
         """
         if imports:
             self._include["imports"] = True
@@ -203,6 +206,8 @@ class QueryBuilder:
             self._include["time_labels"] = True
         if total_rows:
             self._include["total_rows"] = True
+        if trim_relative_date_range:
+            self._include["trim_relative_date_range"] = True
         return self
 
     def copy(self) -> "QueryBuilder":

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Dimension.VISIT_SCREEN` (`visit:screen`) for screen-size breakdowns
+- `QueryBuilder.include(trim_relative_date_range=True)` drops empty time after the current moment for `day`, `month`, and `year` date ranges
 - `QueryBuilder.where()` plus `filter_clause()`, `any_of()`, `all_of()`, and `negate()` for the Stats API `or`, `and`, and `not` filters. `has_done()` and `has_not_done()` build behavioral filters, which only accept an event dimension and cannot be nested
 - `Dimension.event_property()` for the documented `event:props:<name>` custom-property dimension
 - `send_event(cf_connecting_ip=...)` sets the `CF-Connecting-IP` header. The Events API uses that address instead of `X-Forwarded-For` when the header is present, which matters for requests that pass through Cloudflare
