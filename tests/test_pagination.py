@@ -7,7 +7,7 @@ import pytest
 import respx
 from respx import MockRouter
 
-from plausible_client import AsyncClient, Client, Metric, QueryBuilder
+from plausible_client import AsyncClient, Client, Dimension, Metric, QueryBuilder
 
 
 @respx.mock
@@ -278,6 +278,7 @@ def test_query_builder_include_options(respx_mock: MockRouter) -> None:
     query = (
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
+        .dimensions(Dimension.TIME_DAY)
         .date_range(date(2024, 1, 1), date(2024, 1, 2))
         .include(imports=True, time_labels=True, total_rows=True)
     )

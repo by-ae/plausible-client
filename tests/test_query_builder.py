@@ -469,6 +469,165 @@ def test_duplicate_metrics_and_dimensions_are_rejected() -> None:
         )
 
 
+def test_order_by_must_name_a_selected_metric_or_dimension() -> None:
+    """The query builder rejects an order_by entry that was not queried."""
+    with pytest.raises(ValueError, match="not a queried metric or dimension"):
+        QueryBuilder("example.com").metrics(Metric.VISITORS).order_by(Metric.PAGEVIEWS).build()
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .dimensions(Dimension.VISIT_SOURCE)
+        .order_by(Dimension.VISIT_SOURCE, "asc")
+        .build()
+    )
+    assert payload["order_by"] == [["visit:source", "asc"]]
+
+
+def test_time_labels_require_a_time_dimension() -> None:
+    """include.time_labels without a time dimension is an invalid include."""
+    with pytest.raises(ValueError, match="time dimension"):
+        (QueryBuilder("example.com").metrics(Metric.VISITORS).include(time_labels=True).build())
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .dimensions(Dimension.TIME)
+        .include(time_labels=True)
+        .build()
+    )
+    assert payload["include"]["time_labels"] is True
+
+
+def test_session_metrics_cannot_mix_with_event_dimensions() -> None:
+    """bounce_rate with event:page is allowed. Other event dimensions are not."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.BOUNCE_RATE, Metric.VISIT_DURATION)
+        .dimensions(Dimension.EVENT_PAGE, Dimension.EVENT_HOSTNAME)
+        .build()
+    )
+    assert payload["dimensions"] == ["event:page", "event:hostname"]
+
+    with pytest.raises(ValueError, match="event dimension"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.BOUNCE_RATE)
+            .dimensions(Dimension.EVENT_NAME)
+            .build()
+        )
+
+
+def test_event_metrics_cannot_mix_with_session_dimensions() -> None:
+    """pageviews cannot be grouped by entry or exit page."""
+    with pytest.raises(ValueError, match="session dimension"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.PAGEVIEWS)
+            .dimensions(Dimension.VISIT_ENTRY_PAGE)
+            .build()
+        )
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.AVERAGE_REVENUE)
+        .dimensions(Dimension.VISIT_ENTRY_PAGE)
+        .build()
+    )
+    assert payload["metrics"] == ["average_revenue"]
+
+
+def test_metric_filter_requirements() -> None:
+    """scroll_depth, time_on_page, and conversion_rate need the documented target."""
+    with pytest.raises(ValueError, match="scroll_depth"):
+        QueryBuilder("example.com").metrics(Metric.SCROLL_DEPTH).build()
+
+    nested_page = all_of(
+        filter_clause(Dimension.EVENT_PAGE, "is", "/docs"),
+        filter_clause(Dimension.VISIT_SOURCE, "is", "Google"),
+    )
+    with pytest.raises(ValueError, match="scroll_depth"):
+        QueryBuilder("example.com").metrics(Metric.SCROLL_DEPTH).where(nested_page).build()
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.SCROLL_DEPTH)
+        .filter(Dimension.EVENT_PAGE, "is", "/docs")
+        .build()
+    )
+    assert payload["metrics"] == ["scroll_depth"]
+
+    with pytest.raises(ValueError, match="time_on_page"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.TIME_ON_PAGE)
+            .where(has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/docs")))
+            .build()
+        )
+
+    payload = QueryBuilder("example.com").metrics(Metric.TIME_ON_PAGE).where(nested_page).build()
+    assert payload["metrics"] == ["time_on_page"]
+
+    with pytest.raises(ValueError, match="conversion_rate"):
+        QueryBuilder("example.com").metrics(Metric.CONVERSION_RATE).build()
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.CONVERSION_RATE)
+        .dimensions(Dimension.EVENT_GOAL)
+        .build()
+    )
+    assert payload["dimensions"] == ["event:goal"]
+
+
+def test_views_per_visit_restrictions() -> None:
+    """views_per_visit rejects event:page filters and non-time dimensions."""
+    with pytest.raises(ValueError, match="event:page"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.VIEWS_PER_VISIT)
+            .filter(Dimension.EVENT_PAGE, "is", "/docs")
+            .build()
+        )
+    with pytest.raises(ValueError, match="non-time"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.VIEWS_PER_VISIT)
+            .dimensions(Dimension.VISIT_SOURCE)
+            .build()
+        )
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VIEWS_PER_VISIT)
+        .dimensions(Dimension.TIME_DAY)
+        .build()
+    )
+    assert payload["dimensions"] == ["time:day"]
+
+
+def test_goal_and_hostname_filters_stay_at_the_top_level() -> None:
+    """Nested event:goal and event:hostname filters are rejected."""
+    with pytest.raises(ValueError, match="top level"):
+        (
+            QueryBuilder("example.com")
+            .where(
+                any_of(
+                    filter_clause(Dimension.EVENT_GOAL, "is", "Signup"),
+                    filter_clause(Dimension.VISIT_SOURCE, "is", "Google"),
+                )
+            )
+            .build()
+        )
+
+    payload = (
+        QueryBuilder("example.com")
+        .where(has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")))
+        .build()
+    )
+    assert payload["filters"][0][0] == "has_not_done"
+
+
 def test_documented_metric_and_dimension_names() -> None:
     """Constants match the Stats API metric and dimension names."""
     assert Metric.SCROLL_DEPTH == "scroll_depth"

@@ -240,7 +240,9 @@ query = (
 
 Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
 
-`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique.
+`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`, and each entry has to be one of the query's metrics or dimensions. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique. `include.time_labels` requires a time dimension.
+
+`scroll_depth` and `time_on_page` need an `event:page` filter or dimension. A nested `event:page` filter is enough for `time_on_page`. `scroll_depth` needs that filter at the top level, or `event:page` as a dimension. `conversion_rate` and `group_conversion_rate` need an `event:goal` filter or dimension. `views_per_visit` cannot be filtered by `event:page` or broken down by a non-time dimension. `bounce_rate`, `visit_duration`, and `views_per_visit` can be broken down by `event:page` (and `event:hostname` together with `event:page`). Other event dimensions cannot be combined with those session metrics. `pageviews`, `events`, `scroll_depth`, and `time_on_page` cannot be broken down by entry or exit page. `event:goal` and `event:hostname` filters have to stay at the top level. A behavioral filter may still use `event:goal`.
 
 ```python
 from plausible_client import (
