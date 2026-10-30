@@ -139,6 +139,8 @@ if result.dropped:
 
 `send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
+Revenue needs a current ISO 4217 `currency` such as `"USD"` or `"EUR"`, and an `amount` that is a number or a numeric string. A lowercase code or any other invalid currency or amount does not fail the request: the event is recorded, the API returns HTTP 202, and only the revenue is discarded. `result.revenue_discarded` reports that. There is no response header for it. A non-finite amount is rejected before the request, because it is not valid JSON.
+
 ### Sites API - Managing Sites Programmatically
 
 ```python

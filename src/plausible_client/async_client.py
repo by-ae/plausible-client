@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from plausible_client._events import validate_event
+from plausible_client._events import revenue_discarded, validate_event
 from plausible_client._pages import check_page_size, collect_pages_async
 from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_async
@@ -156,7 +156,12 @@ class AsyncClient:
             props: Custom properties. The API stores at most 30 and discards
                 the rest. Keys are limited to 300 bytes and values to 2000
                 bytes. Blank values are discarded.
-            revenue: Revenue data with amount and currency
+            revenue: Revenue object with ``currency`` and ``amount``.
+                ``currency`` is a current ISO 4217 code such as ``"USD"``.
+                ``amount`` is a number or a numeric string. An invalid
+                currency or amount is still sent. The event is recorded,
+                the API returns HTTP 202, and ``EventResult.revenue_discarded``
+                is true.
             referrer: Referrer URL for this event (document.referrer for pageviews)
             interactive: Whether the event counts toward bounce rate.
                 Omit to let Plausible treat the event as interactive.
@@ -171,7 +176,8 @@ class AsyncClient:
         Returns:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
-            HTTP 202 in that case.
+            HTTP 202 in that case. ``revenue_discarded`` is true when the
+            revenue object will not be stored.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -188,6 +194,7 @@ class AsyncClient:
             interactive=interactive,
             props=props,
         )
+        discarded_revenue = revenue_discarded(revenue)
         headers: dict[str, str] = {}
         if user_agent:
             headers["User-Agent"] = user_agent
@@ -221,7 +228,7 @@ class AsyncClient:
             headers=headers,
         )
         self._handle_response(response)
-        return EventResult(dropped=event_was_dropped(response))
+        return EventResult(dropped=event_was_dropped(response), revenue_discarded=discarded_revenue)
 
     async def list_sites(
         self,
