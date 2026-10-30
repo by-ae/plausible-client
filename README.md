@@ -146,8 +146,9 @@ from plausible_client import Client
 
 client = Client(api_key="your-sites-api-key")
 
-# List all accessible sites
-sites, meta = client.list_sites()
+# List all accessible sites. One response holds at most 100 sites.
+# meta["after"] is the next cursor, and null means there is no next page.
+sites = client.list_all_sites()
 for site in sites:
     print(f"{site.domain} ({site.timezone})")
 
@@ -173,8 +174,9 @@ goal = client.create_goal(
     display_name="User Signup",
 )
 
-# List goals
-goals, meta = client.list_goals("example.com")
+# List goals. list_all_goals, list_all_guests, and list_all_teams
+# follow meta["after"] the same way, keeping limit the same on each request.
+goals = client.list_all_goals("example.com")
 
 # Invite a guest
 guest = client.invite_guest(
