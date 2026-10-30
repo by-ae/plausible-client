@@ -416,8 +416,9 @@ try:
     result = client.query(query)
 except AuthenticationError:
     print("Invalid API key")
-except PaymentRequiredError:
-    print("Subscription payment required")
+except PaymentRequiredError as e:
+    # The message is the API error, for example a site limit or a missing feature.
+    print(e.message)
 except ForbiddenError as e:
     print(f"API key cannot do this: {e.message}")
 except NotFoundError as e:

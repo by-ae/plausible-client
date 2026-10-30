@@ -33,7 +33,10 @@ def raise_for_status(response: httpx.Response, *, invalid_message: str) -> NoRet
         raise AuthenticationError("Invalid API key")
 
     if response.status_code == 402:
-        raise PaymentRequiredError("Payment required to access this resource")
+        # Sites API 402 bodies name the limit or feature. A fixed message hides that.
+        raise PaymentRequiredError(
+            message_from_payload(json_object(response), "Payment required to access this resource")
+        )
 
     if response.status_code == 403:
         raise ForbiddenError(message_from_payload(json_object(response), "Forbidden"))
