@@ -29,7 +29,7 @@ def test_client_payment_required_error() -> None:
         client.query(query)
 
     assert exc_info.value.status_code == 402
-    assert "Payment required" in str(exc_info.value)
+    assert str(exc_info.value) == "Payment required. Please update your subscription."
 
 
 @pytest.mark.asyncio
@@ -49,7 +49,7 @@ async def test_async_client_payment_required_error() -> None:
         await client.query(query)
 
     assert exc_info.value.status_code == 402
-    assert "Payment required" in str(exc_info.value)
+    assert str(exc_info.value) == "Payment required. Please update your subscription."
     await client.close()
 
 
@@ -75,9 +75,49 @@ def test_send_event_payment_required_error() -> None:
 
     client = Client(api_key="test-key")
 
-    with pytest.raises(PaymentRequiredError):
+    with pytest.raises(PaymentRequiredError, match="Payment required"):
         client.send_event(
             domain="example.com",
             name="pageview",
             url="https://example.com/home",
         )
+
+
+@respx.mock
+def test_payment_required_uses_the_api_error() -> None:
+    """A 402 names the plan limit. Callers need that string, not a generic one."""
+    respx.post("https://plausible.io/api/v1/sites").mock(
+        return_value=httpx.Response(
+            402,
+            json={
+                "error": (
+                    "Your account has reached the limit of 10 sites. "
+                    "To unlock more sites, please upgrade your subscription."
+                )
+            },
+        )
+    )
+
+    client = Client(api_key="test-key")
+
+    with pytest.raises(PaymentRequiredError) as exc_info:
+        client.create_site(domain="another.example")
+
+    assert exc_info.value.status_code == 402
+    assert exc_info.value.message == (
+        "Your account has reached the limit of 10 sites. "
+        "To unlock more sites, please upgrade your subscription."
+    )
+
+
+@respx.mock
+def test_payment_required_without_json_body_keeps_the_default() -> None:
+    """A 402 with no error string still raises PaymentRequiredError."""
+    respx.get("https://plausible.io/api/v1/sites").mock(return_value=httpx.Response(402, text=""))
+
+    client = Client(api_key="test-key")
+
+    with pytest.raises(PaymentRequiredError) as exc_info:
+        client.list_sites()
+
+    assert exc_info.value.message == "Payment required to access this resource"

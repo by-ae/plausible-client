@@ -1,6 +1,11 @@
 """Checks for Events API payloads the ingestion request parser rejects."""
 
+import math
+import re
+from typing import Any
 from urllib.parse import urlsplit
+
+from plausible_client._currencies import CURRENT_CURRENCIES
 
 # The request parser measures the whole URL with byte_size/1.
 MAX_URL_BYTES = 2000
@@ -68,6 +73,53 @@ def _validate_props(props: dict[str, PropValue]) -> None:
         stored = _stored_prop_text(value)
         if len(stored.encode("utf-8")) > MAX_PROP_VALUE_BYTES:
             raise ValueError(f"property {key!r} is longer than {MAX_PROP_VALUE_BYTES} bytes")
+
+
+# Decimal.parse/1 succeeds when a numeric prefix is present and ignores the rest.
+_DECIMAL_PREFIX = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+_MISSING = object()
+
+
+def revenue_discarded(revenue: Any) -> bool:
+    """Return whether ingestion will store the event without this revenue.
+
+    A revenue object needs ``currency`` and ``amount``. ``currency`` has to
+    be one of the current ISO 4217 codes Plausible accepts. ``amount`` has
+    to be an integer, a finite float, or a string with a numeric prefix.
+    Anything else is ignored. The event is still recorded and the response
+    is HTTP 202, with no header for the discarded revenue.
+
+    A non-finite amount is not valid JSON, so the whole event would fail
+    to parse. That case raises ValueError instead of being sent.
+    """
+    if revenue is None:
+        return False
+    if not isinstance(revenue, dict):
+        return True
+    amount = revenue.get("amount", _MISSING)
+    currency = revenue.get("currency", _MISSING)
+    if amount is _MISSING or currency is _MISSING:
+        return True
+    if not isinstance(currency, str) or currency not in CURRENT_CURRENCIES:
+        return True
+    return not _amount_kept(amount)
+
+
+def _amount_kept(amount: Any) -> bool:
+    if isinstance(amount, bool):
+        return False
+    if isinstance(amount, int):
+        return True
+    if isinstance(amount, float):
+        if not math.isfinite(amount):
+            raise ValueError(
+                "revenue amount must be a finite number. "
+                "A non-finite value is not valid JSON and the event is not recorded."
+            )
+        return True
+    if isinstance(amount, str):
+        return _DECIMAL_PREFIX.match(amount) is not None
+    return False
 
 
 def _stored_prop_text(value: PropValue) -> str:

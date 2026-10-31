@@ -139,6 +139,8 @@ if result.dropped:
 
 `send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
+Revenue needs a current ISO 4217 `currency` such as `"USD"` or `"EUR"`, and an `amount` that is a number or a numeric string. A lowercase code or any other invalid currency or amount does not fail the request: the event is recorded, the API returns HTTP 202, and only the revenue is discarded. `result.revenue_discarded` reports that. There is no response header for it. A non-finite amount is rejected before the request, because it is not valid JSON.
+
 ### Sites API - Managing Sites Programmatically
 
 ```python
@@ -146,8 +148,9 @@ from plausible_client import Client
 
 client = Client(api_key="your-sites-api-key")
 
-# List all accessible sites
-sites, meta = client.list_sites()
+# List all accessible sites. One response holds at most 100 sites.
+# meta["after"] is the next cursor, and null means there is no next page.
+sites = client.list_all_sites()
 for site in sites:
     print(f"{site.domain} ({site.timezone})")
 
@@ -173,8 +176,9 @@ goal = client.create_goal(
     display_name="User Signup",
 )
 
-# List goals
-goals, meta = client.list_goals("example.com")
+# List goals. list_all_goals, list_all_guests, and list_all_teams
+# follow meta["after"] the same way, keeping limit the same on each request.
+goals = client.list_all_goals("example.com")
 
 # Invite a guest
 guest = client.invite_guest(
@@ -240,7 +244,9 @@ query = (
 
 Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
 
-`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique.
+`event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`, and each entry has to be one of the query's metrics or dimensions. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique. `include.time_labels` requires a time dimension.
+
+`scroll_depth` and `time_on_page` need an `event:page` filter or dimension. A nested `event:page` filter is enough for `time_on_page`. `scroll_depth` needs that filter at the top level, or `event:page` as a dimension. `conversion_rate` and `group_conversion_rate` need an `event:goal` filter or dimension. `views_per_visit` cannot be filtered by `event:page` or broken down by a non-time dimension. `bounce_rate`, `visit_duration`, and `views_per_visit` can be broken down by `event:page` (and `event:hostname` together with `event:page`). Other event dimensions cannot be combined with those session metrics. `pageviews`, `events`, `scroll_depth`, and `time_on_page` cannot be broken down by entry or exit page. `event:goal` and `event:hostname` filters have to stay at the top level. A behavioral filter may still use `event:goal`.
 
 ```python
 from plausible_client import (
@@ -416,8 +422,9 @@ try:
     result = client.query(query)
 except AuthenticationError:
     print("Invalid API key")
-except PaymentRequiredError:
-    print("Subscription payment required")
+except PaymentRequiredError as e:
+    # The message is the API error, for example a site limit or a missing feature.
+    print(e.message)
 except ForbiddenError as e:
     print(f"API key cannot do this: {e.message}")
 except NotFoundError as e:

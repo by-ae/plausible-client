@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `list_all_sites()`, `list_all_goals()`, `list_all_guests()`, and `list_all_teams()` follow the Sites API `after` cursor until it is null. Page size must be from 1 to 100, because a larger `limit` is ignored
 - `Dimension.VISIT_SCREEN` (`visit:screen`) for screen-size breakdowns
 - `QueryBuilder.include(trim_relative_date_range=True)` drops empty time after the current moment for `day`, `month`, and `year` date ranges
 - `QueryBuilder.where()` plus `filter_clause()`, `any_of()`, `all_of()`, and `negate()` for the Stats API `or`, `and`, and `not` filters. `has_done()` and `has_not_done()` build behavioral filters, which only accept an event dimension and cannot be nested
@@ -48,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `send_event()` sets `EventResult.revenue_discarded` when the revenue currency is not a current ISO 4217 code Plausible accepts, or the amount is not a number or numeric string. The event is still sent, matching the API, which records it and drops the revenue. A non-finite amount is rejected before the request
+- `QueryBuilder.build()` rejects `order_by` entries that are not selected metrics or dimensions, `include.time_labels` without a time dimension, and metric or dimension combinations the stats query builder refuses. `event:goal` and `event:hostname` filters are rejected when nested
+- 402 responses keep the API `error` string, such as a site limit or a plan that does not include shared links or custom properties
 - `send_event()` rejects blank domains, empty or 120+ character event names, URLs longer than 2000 bytes, and `data:` URLs. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected. `interactive=False` is rejected for system events such as `pageview`, because the ingestion pipeline ignores the flag and still counts them as interactive
 - Time dimensions are rejected in filters. `event:goal` filters only accept `is` and `contains`, and `segment` filters only accept `is`. `order_by` rejects `event:goal` and `segment`. `limit()` must be from 1 to 10000, `offset()` must be zero or greater, and duplicate metrics or dimensions are rejected. The query schema refuses those payloads
 - `QueryBuilder.date_range()` accepts relative ranges such as `"14d"` and `"3mo"`. The Stats API parser allows 1 to 5000 days and 1 to 100 months. Values outside those bounds are rejected before the request

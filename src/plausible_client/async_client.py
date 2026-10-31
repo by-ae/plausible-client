@@ -4,7 +4,8 @@ from typing import Any
 
 import httpx
 
-from plausible_client._events import validate_event
+from plausible_client._events import revenue_discarded, validate_event
+from plausible_client._pages import check_page_size, collect_pages_async
 from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_async
 from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
@@ -155,7 +156,12 @@ class AsyncClient:
             props: Custom properties. The API stores at most 30 and discards
                 the rest. Keys are limited to 300 bytes and values to 2000
                 bytes. Blank values are discarded.
-            revenue: Revenue data with amount and currency
+            revenue: Revenue object with ``currency`` and ``amount``.
+                ``currency`` is a current ISO 4217 code such as ``"USD"``.
+                ``amount`` is a number or a numeric string. An invalid
+                currency or amount is still sent. The event is recorded,
+                the API returns HTTP 202, and ``EventResult.revenue_discarded``
+                is true.
             referrer: Referrer URL for this event (document.referrer for pageviews)
             interactive: Whether the event counts toward bounce rate.
                 Omit to let Plausible treat the event as interactive.
@@ -170,7 +176,8 @@ class AsyncClient:
         Returns:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
-            HTTP 202 in that case.
+            HTTP 202 in that case. ``revenue_discarded`` is true when the
+            revenue object will not be stored.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -187,6 +194,7 @@ class AsyncClient:
             interactive=interactive,
             props=props,
         )
+        discarded_revenue = revenue_discarded(revenue)
         headers: dict[str, str] = {}
         if user_agent:
             headers["User-Agent"] = user_agent
@@ -220,7 +228,7 @@ class AsyncClient:
             headers=headers,
         )
         self._handle_response(response)
-        return EventResult(dropped=event_was_dropped(response))
+        return EventResult(dropped=event_was_dropped(response), revenue_discarded=discarded_revenue)
 
     async def list_sites(
         self,
@@ -262,6 +270,23 @@ class AsyncClient:
         sites = [Site.from_dict(site_data) for site_data in data["sites"]]
         return sites, data.get("meta", {})
 
+    async def list_all_sites(self, page_size: int = 100, team_id: str | None = None) -> list[Site]:
+        """
+        List every site available to this API key.
+
+        ``list_sites`` returns one page. The next cursor is ``meta["after"]``,
+        and ``null`` means there are no further sites. This follows that
+        cursor and sends the same ``limit`` on every request. ``page_size``
+        must be from 1 to 100. A larger limit is ignored by the Sites API
+        and the default page size is used instead.
+        """
+        check_page_size(page_size)
+
+        async def fetch(after: str | None) -> tuple[list[Site], dict[str, Any]]:
+            return await self.list_sites(limit=page_size, after=after, team_id=team_id)
+
+        return await collect_pages_async(fetch)
+
     async def list_teams(
         self,
         limit: int = 100,
@@ -297,6 +322,19 @@ class AsyncClient:
         data = self._handle_json_response(response)
         teams = [Team.from_dict(team_data) for team_data in data["teams"]]
         return teams, data.get("meta", {})
+
+    async def list_all_teams(self, page_size: int = 100) -> list[Team]:
+        """
+        List every team available to this API key.
+
+        See ``list_all_sites`` for how the ``after`` cursor and page size work.
+        """
+        check_page_size(page_size)
+
+        async def fetch(after: str | None) -> tuple[list[Team], dict[str, Any]]:
+            return await self.list_teams(limit=page_size, after=after)
+
+        return await collect_pages_async(fetch)
 
     async def get_site(self, site_id: str) -> Site:
         """
@@ -454,6 +492,19 @@ class AsyncClient:
         data = self._handle_json_response(response)
         goals = [Goal.from_dict(goal_data) for goal_data in data["goals"]]
         return goals, data.get("meta", {})
+
+    async def list_all_goals(self, site_id: str, page_size: int = 100) -> list[Goal]:
+        """
+        List every goal for a site.
+
+        See ``list_all_sites`` for how the ``after`` cursor and page size work.
+        """
+        check_page_size(page_size)
+
+        async def fetch(after: str | None) -> tuple[list[Goal], dict[str, Any]]:
+            return await self.list_goals(site_id, limit=page_size, after=after)
+
+        return await collect_pages_async(fetch)
 
     async def create_goal(
         self,
@@ -657,6 +708,19 @@ class AsyncClient:
         data = self._handle_json_response(response)
         guests = [Guest.from_dict(guest_data) for guest_data in data["guests"]]
         return guests, data.get("meta", {})
+
+    async def list_all_guests(self, site_id: str, page_size: int = 100) -> list[Guest]:
+        """
+        List every guest and invitation for a site.
+
+        See ``list_all_sites`` for how the ``after`` cursor and page size work.
+        """
+        check_page_size(page_size)
+
+        async def fetch(after: str | None) -> tuple[list[Guest], dict[str, Any]]:
+            return await self.list_guests(site_id, limit=page_size, after=after)
+
+        return await collect_pages_async(fetch)
 
     async def invite_guest(self, site_id: str, email: str, role: str) -> Guest:
         """

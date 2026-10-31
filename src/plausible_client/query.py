@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
+from plausible_client._query_rules import validate_query
 from plausible_client.models import DateRange, Filter, OrderBy, normalize_clauses
 
 
@@ -239,6 +240,13 @@ class QueryBuilder:
 
     def build(self) -> dict[str, Any]:
         """Build the query payload."""
+        validate_query(
+            metrics=self._metrics,
+            dimensions=self._dimensions,
+            filters=self._filters,
+            order_by=self._order_by,
+            include=self._include,
+        )
         payload: dict[str, Any] = {"site_id": self.site_id}
 
         if self._metrics:

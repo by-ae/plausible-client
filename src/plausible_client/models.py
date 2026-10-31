@@ -210,9 +210,14 @@ class EventResult:
     The API returns HTTP 202 even when an event is dropped. ``dropped`` is
     true when the ``x-plausible-dropped`` header is a positive count. The
     docs use the value ``1``.
+
+    ``revenue_discarded`` is true when revenue was sent but ingestion will
+    store the event without it. Invalid currency or amount does not change
+    the HTTP 202 response and does not set a header.
     """
 
     dropped: bool = False
+    revenue_discarded: bool = False
 
 
 @dataclass

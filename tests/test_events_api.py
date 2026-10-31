@@ -253,3 +253,93 @@ async def test_async_send_event_rejects_noninteractive_pageview() -> None:
             interactive=False,
         )
     await client.close()
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "revenue",
+    [
+        {"currency": "USD", "amount": 49.0},
+        {"currency": "EUR", "amount": "1322.22"},
+        {"currency": "JPY", "amount": 0},
+        {"currency": "USD", "amount": "10abc"},
+    ],
+)
+def test_send_event_keeps_revenue_the_pipeline_accepts(revenue: dict[str, object]) -> None:
+    """Integers, finite floats, and numeric strings with a current code are kept."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="Purchase",
+        url="https://example.com/thanks",
+        revenue=revenue,
+    )
+
+    assert result.revenue_discarded is False
+    assert json.loads(route.calls.last.request.content)["revenue"] == revenue
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "revenue",
+    [
+        {"currency": "usd", "amount": 10},
+        {"currency": "SLE", "amount": 10},
+        {"currency": "USD", "amount": "nope"},
+        {"currency": "USD", "amount": True},
+        {"amount": 10},
+        {"currency": "USD"},
+    ],
+)
+def test_send_event_flags_revenue_the_pipeline_discards(revenue: dict[str, object]) -> None:
+    """Invalid currency or amount is still HTTP 202, and the event is recorded."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="Purchase",
+        url="https://example.com/thanks",
+        revenue=revenue,
+    )
+
+    assert result.revenue_discarded is True
+    assert result.dropped is False
+    assert json.loads(route.calls.last.request.content)["revenue"] == revenue
+
+
+def test_send_event_rejects_non_finite_revenue_before_sending() -> None:
+    """NaN is not valid JSON, so the request parser never sees an event."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="finite"):
+        client.send_event(
+            domain="example.com",
+            name="Purchase",
+            url="https://example.com/thanks",
+            revenue={"currency": "USD", "amount": float("nan")},
+        )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_send_event_flags_discarded_revenue() -> None:
+    """The async client reports the same revenue outcome."""
+    respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202, text="ok"))
+
+    client = AsyncClient(api_key="test-key")
+    result = await client.send_event(
+        domain="example.com",
+        name="Purchase",
+        url="https://example.com/thanks",
+        revenue={"currency": "usd", "amount": "49.00"},
+    )
+
+    assert result.revenue_discarded is True
+    await client.close()
