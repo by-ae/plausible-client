@@ -5,11 +5,11 @@ from typing import Any
 import httpx
 
 from plausible_client._events import revenue_discarded, validate_event
-from plausible_client._pages import check_page_size, collect_pages_async
+from plausible_client._pages import check_list_limit, check_page_size, collect_pages_async
 from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
 from plausible_client._retry import retry_async
 from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
-from plausible_client.query import QueryBuilder
+from plausible_client.query import QueryBuilder, check_query_page_size
 
 
 class AsyncClient:
@@ -84,21 +84,21 @@ class AsyncClient:
 
         Args:
             query_builder: QueryBuilder instance with the query configuration
-            page_size: Number of results per page (1 to 10000, default 1000)
+            page_size: Number of results per page. An integer from 1 to 10000,
+                default 1000. A boolean or a float is rejected.
 
         Returns:
             QueryResult with all results combined
 
         Raises:
-            ValueError: If page_size is not between 1 and 10000
+            ValueError: If page_size is not an integer from 1 to 10000
             AuthenticationError: If authentication fails
             PaymentRequiredError: If payment is required (subscription issue)
             InvalidQueryError: If the query is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
         """
-        if not 1 <= page_size <= 10000:
-            raise ValueError(f"page_size must be between 1 and 10000, got {page_size}")
+        check_query_page_size(page_size)
 
         all_results: list[dict[str, Any]] = []
         offset = 0
@@ -241,7 +241,9 @@ class AsyncClient:
         List sites accessible to this API key.
 
         Args:
-            limit: Maximum number of sites to return (default 100)
+            limit: Page size, an integer from 1 to 100 (default 100).
+                A larger value is ignored by the API and the default page
+                is returned, so it is rejected here.
             after: Pagination cursor for next page
             before: Pagination cursor for previous page
             team_id: Filter by team ID
@@ -253,6 +255,7 @@ class AsyncClient:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"limit": limit}
         if after:
             params["after"] = after
@@ -308,6 +311,7 @@ class AsyncClient:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"limit": limit}
         if after:
             params["after"] = after
@@ -478,6 +482,7 @@ class AsyncClient:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"site_id": site_id, "limit": limit}
         if after:
             params["after"] = after
@@ -694,6 +699,7 @@ class AsyncClient:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"site_id": site_id, "limit": limit}
         if after:
             params["after"] = after

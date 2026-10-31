@@ -16,16 +16,25 @@ T = TypeVar("T")
 MAX_PAGE_SIZE = 100
 
 
+def _check_bound(value: int, *, maximum: int, label: str) -> None:
+    """Reject values ``Plausible.Pagination`` will not use as the page size.
+
+    ``to_pagination_opts/1`` keeps a limit only when it is an integer from
+    1 to 100. ``true`` and ``1.5`` are not integers, and a larger limit is
+    dropped so the default page size is used instead.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise ValueError(f"{label} must be an integer from 1 to {maximum}, got {value!r}")
+
+
 def check_page_size(page_size: int) -> None:
     """Reject a page size the Sites API pagination helper will not apply."""
-    if (
-        isinstance(page_size, bool)
-        or not isinstance(page_size, int)
-        or not 1 <= page_size <= MAX_PAGE_SIZE
-    ):
-        raise ValueError(
-            f"page_size must be an integer from 1 to {MAX_PAGE_SIZE}, got {page_size!r}"
-        )
+    _check_bound(page_size, maximum=MAX_PAGE_SIZE, label="page_size")
+
+
+def check_list_limit(limit: int) -> None:
+    """Reject a ``limit`` the Sites API list endpoints will ignore."""
+    _check_bound(limit, maximum=MAX_PAGE_SIZE, label="limit")
 
 
 def collect_pages(

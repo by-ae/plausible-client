@@ -55,6 +55,23 @@ DATE_RANGE_PRESETS = frozenset(
 # Bounds match Plausible.Stats.ApiQueryParser.parse_input_date_range/1.
 MAX_RELATIVE_DAYS = 5000
 MAX_RELATIVE_MONTHS = 100
+MAX_QUERY_PAGE_SIZE = 10000
+
+
+def check_query_page_size(page_size: int) -> None:
+    """Reject a page size the Stats API pagination schema will not accept.
+
+    ``bool`` is a subclass of ``int``, so ``True`` would otherwise pass a
+    range check and be sent as JSON ``true``. A float is not an integer either.
+    """
+    if (
+        isinstance(page_size, bool)
+        or not isinstance(page_size, int)
+        or not 1 <= page_size <= MAX_QUERY_PAGE_SIZE
+    ):
+        raise ValueError(
+            f"page_size must be an integer from 1 to {MAX_QUERY_PAGE_SIZE}, got {page_size!r}"
+        )
 
 
 class QueryBuilder:

@@ -130,14 +130,30 @@ def test_query_all_invalid_page_size(respx_mock: MockRouter) -> None:
         .date_range(date(2024, 1, 1), date(2024, 1, 31))
     )
 
-    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+    with pytest.raises(ValueError, match="integer from 1 to 10000"):
         client.query_all(query, page_size=0)
 
-    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+    with pytest.raises(ValueError, match="integer from 1 to 10000"):
         client.query_all(query, page_size=10001)
 
-    with pytest.raises(ValueError, match="page_size must be between 1 and 10000"):
+    with pytest.raises(ValueError, match="integer from 1 to 10000"):
         client.query_all(query, page_size=-5)
+
+    # bool is a subclass of int, and a float is not a schema integer.
+    for page_size in (True, False, 1.5):
+        with pytest.raises(ValueError, match="integer from 1 to 10000"):
+            client.query_all(query, page_size=page_size)  # type: ignore[arg-type]
+
+
+async def test_async_query_all_rejects_a_boolean_page_size() -> None:
+    """True is an int in Python, but the query schema limit is an integer."""
+    client = AsyncClient(api_key="test-key")
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
+
+    with pytest.raises(ValueError, match="integer from 1 to 10000"):
+        await client.query_all(query, page_size=True)  # type: ignore[arg-type]
+
+    await client.close()
 
 
 @respx.mock

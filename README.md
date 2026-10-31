@@ -148,7 +148,10 @@ from plausible_client import Client
 
 client = Client(api_key="your-sites-api-key")
 
-# List all accessible sites. One response holds at most 100 sites.
+# List all accessible sites. list_sites, list_goals, list_guests, and
+# list_teams take a limit from 1 to 100. A larger limit is ignored and the
+# default page of 100 is returned, so those calls reject it.
+# One response holds at most 100 sites.
 # meta["after"] is the next cursor, and null means there is no next page.
 sites = client.list_all_sites()
 for site in sites:
@@ -311,7 +314,7 @@ for row in result.results:
 The `query_all()` method:
 - Automatically makes multiple requests to fetch all results
 - Combines results from all pages into a single QueryResult
-- Defaults to 1000 results per page (configurable up to 10000)
+- Defaults to 1000 results per page. ``page_size`` must be an integer from 1 to 10000. A boolean or a float is rejected, because the query schema requires an integer limit
 - Works with both `Client` and `AsyncClient`
 
 ```python
