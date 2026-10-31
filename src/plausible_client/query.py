@@ -247,6 +247,16 @@ class QueryBuilder:
             order_by=self._order_by,
             include=self._include,
         )
+        # The public query schema requires both. Omitting either is a schema
+        # error, checked before the query builder runs.
+        if not self._metrics:
+            raise ValueError(
+                "metrics is required. The Stats API query schema rejects a query without one."
+            )
+        if self._date_range is None:
+            raise ValueError(
+                "date_range is required. The Stats API query schema rejects a query without one."
+            )
         payload: dict[str, Any] = {"site_id": self.site_id}
 
         if self._metrics:

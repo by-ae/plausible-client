@@ -35,7 +35,7 @@ def test_fractional_retry_after_is_honoured(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         client.query(query)
@@ -56,7 +56,7 @@ def test_http_date_retry_after_is_honoured(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         client.query(query)
@@ -75,7 +75,7 @@ def test_unparseable_retry_after_falls_back_to_backoff(monkeypatch: pytest.Monke
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         client.query(query)
@@ -98,7 +98,7 @@ def test_rate_limit_error_includes_response_message(monkeypatch: pytest.MonkeyPa
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         client.query(query)
@@ -119,7 +119,7 @@ def test_retry_after_delay_used_before_success(monkeypatch: pytest.MonkeyPatch) 
     )
 
     client = Client(api_key="test-key")
-    result = client.query(QueryBuilder("example.com").metrics(Metric.VISITORS))
+    result = client.query(QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d"))
 
     assert result.results == [{"metrics": [1]}]
     assert slept == [2.0]
@@ -139,7 +139,7 @@ async def test_async_fractional_retry_after(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         await client.query(query)

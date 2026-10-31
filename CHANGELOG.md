@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QueryBuilder.build()` rejects a query that omits `metrics` or `date_range`. The public query schema requires both
 - `send_event()` sets `EventResult.revenue_discarded` when the revenue currency is not a current ISO 4217 code Plausible accepts, or the amount is not a number or numeric string. The event is still sent, matching the API, which records it and drops the revenue. A non-finite amount is rejected before the request
 - `QueryBuilder.build()` rejects `order_by` entries that are not selected metrics or dimensions, `include.time_labels` without a time dimension, and metric or dimension combinations the stats query builder refuses. `event:goal` and `event:hostname` filters are rejected when nested
 - 402 responses keep the API `error` string, such as a site limit or a plan that does not include shared links or custom properties

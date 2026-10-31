@@ -19,7 +19,7 @@ from plausible_client import (
 
 def test_query_builder_basic() -> None:
     """Test basic query building."""
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     payload = query.build()
 
@@ -29,8 +29,10 @@ def test_query_builder_basic() -> None:
 
 def test_query_builder_multiple_metrics() -> None:
     """Test query with multiple metrics."""
-    query = QueryBuilder("example.com").metrics(
-        Metric.VISITORS, Metric.PAGEVIEWS, Metric.BOUNCE_RATE
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS, Metric.PAGEVIEWS, Metric.BOUNCE_RATE)
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -44,6 +46,7 @@ def test_query_builder_with_dimensions() -> None:
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
         .dimensions(Dimension.EVENT_PAGE, Dimension.VISIT_SOURCE)
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -58,6 +61,7 @@ def test_query_builder_with_filter() -> None:
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
         .filter(Dimension.VISIT_SOURCE, "is", "Google")
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -73,6 +77,7 @@ def test_query_builder_with_multiple_filters() -> None:
         .metrics(Metric.VISITORS)
         .filter(Dimension.VISIT_SOURCE, "is", "Google")
         .filter(Dimension.VISIT_COUNTRY, "is_not", "US")
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -86,6 +91,7 @@ def test_query_builder_filter_with_list() -> None:
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
         .filter(Dimension.VISIT_COUNTRY, "is", ["US", "UK", "CA"])
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -95,7 +101,13 @@ def test_query_builder_filter_with_list() -> None:
 
 def test_city_filter_wraps_a_geoname_id() -> None:
     """visit:city clauses are GeoName IDs, and a single id is still a list."""
-    payload = QueryBuilder("example.com").filter(Dimension.VISIT_CITY, "is", 4347778).build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .filter(Dimension.VISIT_CITY, "is", 4347778)
+        .build()
+    )
 
     assert payload["filters"] == [["is", "visit:city", [4347778]]]
 
@@ -108,7 +120,13 @@ def test_city_filter_rejects_string_ids() -> None:
 
 def test_segment_filter_uses_integer_ids() -> None:
     """Segment filters are ["is", "segment", [<integer id>]]."""
-    payload = QueryBuilder("example.com").filter("segment", "is", 123).build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .filter("segment", "is", 123)
+        .build()
+    )
 
     assert payload["filters"] == [["is", "segment", [123]]]
 
@@ -128,7 +146,11 @@ def test_country_code_must_be_two_characters() -> None:
 def test_country_contains_keeps_longer_strings() -> None:
     """The 2-letter check applies to is and is_not, not to contains."""
     payload = (
-        QueryBuilder("example.com").filter(Dimension.VISIT_COUNTRY, "contains", "United").build()
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .filter(Dimension.VISIT_COUNTRY, "contains", "United")
+        .build()
     )
 
     assert payload["filters"] == [["contains", "visit:country", ["United"]]]
@@ -160,6 +182,7 @@ def test_query_builder_with_order_by() -> None:
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS, Metric.PAGEVIEWS)
         .order_by(Metric.VISITORS, "desc")
+        .date_range("7d")
     )
 
     payload = query.build()
@@ -170,7 +193,9 @@ def test_query_builder_with_order_by() -> None:
 
 def test_query_builder_with_pagination() -> None:
     """Test query with limit and offset."""
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS).limit(10).offset(20)
+    query = (
+        QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d").limit(10).offset(20)
+    )
 
     payload = query.build()
 
@@ -200,6 +225,15 @@ def test_query_builder_full_example() -> None:
     assert "date_range" in payload
     assert len(payload["order_by"]) == 1
     assert payload["pagination"]["limit"] == 50
+
+
+def test_build_requires_metrics_and_date_range() -> None:
+    """The public query schema requires both fields."""
+    with pytest.raises(ValueError, match="metrics is required"):
+        QueryBuilder("example.com").date_range("7d").build()
+
+    with pytest.raises(ValueError, match="date_range is required"):
+        QueryBuilder("example.com").metrics(Metric.VISITORS).build()
 
 
 def test_query_builder_date_range_preset() -> None:
@@ -238,7 +272,13 @@ def test_include_trim_relative_date_range() -> None:
 
 def test_include_omits_trim_relative_date_range_by_default() -> None:
     """The flag stays off unless the caller asks for it."""
-    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).include(total_rows=True).build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .include(total_rows=True)
+        .build()
+    )
 
     assert payload["include"] == {"total_rows": True}
 
@@ -297,6 +337,7 @@ def test_query_builder_case_insensitive_filter() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
+        .date_range("7d")
         .filter(Dimension.VISIT_COUNTRY_NAME, "contains", ["united", "EST"], case_sensitive=False)
         .build()
     )
@@ -318,6 +359,8 @@ def test_any_of_matches_the_documented_or_filter() -> None:
     """or is ["or", [filter, filter]], as in the Stats API reference."""
     payload = (
         QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
         .where(
             any_of(
                 filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
@@ -342,6 +385,8 @@ def test_all_of_and_negate_match_the_documented_forms() -> None:
     """and and not use the shapes shown in the Stats API reference."""
     payload = (
         QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
         .where(
             all_of(
                 filter_clause(Dimension.VISIT_COUNTRY_NAME, "is", "Germany"),
@@ -368,6 +413,8 @@ def test_behavioral_filters_wrap_an_event_filter() -> None:
     """has_done and has_not_done take one event-dimension filter."""
     payload = (
         QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
         .where(
             has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing")),
             has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")),
@@ -402,6 +449,8 @@ def test_event_property_dimension() -> None:
     assert Dimension.event_property("author") == "event:props:author"
     payload = (
         QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
         .dimensions(Dimension.event_property("author"))
         .filter(Dimension.event_property("author"), "is", "Jane")
         .build()
@@ -425,7 +474,13 @@ def test_time_dimensions_are_rejected_in_filters() -> None:
 
 def test_event_goal_filter_operators() -> None:
     """The schema allows is and contains on event:goal, and nothing else."""
-    payload = QueryBuilder("example.com").filter(Dimension.EVENT_GOAL, "contains", "Signup").build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .filter(Dimension.EVENT_GOAL, "contains", "Signup")
+        .build()
+    )
     assert payload["filters"] == [["contains", "event:goal", ["Signup"]]]
 
     with pytest.raises(ValueError, match="event:goal"):
@@ -455,7 +510,14 @@ def test_pagination_bounds() -> None:
     with pytest.raises(ValueError, match="offset"):
         QueryBuilder("example.com").offset(-1)
 
-    payload = QueryBuilder("example.com").metrics(Metric.VISITORS).limit(10000).offset(0).build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .limit(10000)
+        .offset(0)
+        .build()
+    )
     assert "pagination" not in payload
 
 
@@ -477,6 +539,7 @@ def test_order_by_must_name_a_selected_metric_or_dimension() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
+        .date_range("7d")
         .dimensions(Dimension.VISIT_SOURCE)
         .order_by(Dimension.VISIT_SOURCE, "asc")
         .build()
@@ -492,6 +555,7 @@ def test_time_labels_require_a_time_dimension() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.VISITORS)
+        .date_range("7d")
         .dimensions(Dimension.TIME)
         .include(time_labels=True)
         .build()
@@ -504,6 +568,7 @@ def test_session_metrics_cannot_mix_with_event_dimensions() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.BOUNCE_RATE, Metric.VISIT_DURATION)
+        .date_range("7d")
         .dimensions(Dimension.EVENT_PAGE, Dimension.EVENT_HOSTNAME)
         .build()
     )
@@ -531,6 +596,7 @@ def test_event_metrics_cannot_mix_with_session_dimensions() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.AVERAGE_REVENUE)
+        .date_range("7d")
         .dimensions(Dimension.VISIT_ENTRY_PAGE)
         .build()
     )
@@ -552,6 +618,7 @@ def test_metric_filter_requirements() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.SCROLL_DEPTH)
+        .date_range("7d")
         .filter(Dimension.EVENT_PAGE, "is", "/docs")
         .build()
     )
@@ -565,7 +632,13 @@ def test_metric_filter_requirements() -> None:
             .build()
         )
 
-    payload = QueryBuilder("example.com").metrics(Metric.TIME_ON_PAGE).where(nested_page).build()
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.TIME_ON_PAGE)
+        .date_range("7d")
+        .where(nested_page)
+        .build()
+    )
     assert payload["metrics"] == ["time_on_page"]
 
     with pytest.raises(ValueError, match="conversion_rate"):
@@ -574,6 +647,7 @@ def test_metric_filter_requirements() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.CONVERSION_RATE)
+        .date_range("7d")
         .dimensions(Dimension.EVENT_GOAL)
         .build()
     )
@@ -600,6 +674,7 @@ def test_views_per_visit_restrictions() -> None:
     payload = (
         QueryBuilder("example.com")
         .metrics(Metric.VIEWS_PER_VISIT)
+        .date_range("7d")
         .dimensions(Dimension.TIME_DAY)
         .build()
     )
@@ -622,6 +697,8 @@ def test_goal_and_hostname_filters_stay_at_the_top_level() -> None:
 
     payload = (
         QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
         .where(has_not_done(filter_clause(Dimension.EVENT_GOAL, "is", "Signup")))
         .build()
     )

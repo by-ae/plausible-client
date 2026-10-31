@@ -31,7 +31,7 @@ async def test_async_client_query_success() -> None:
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS, Metric.PAGEVIEWS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS, Metric.PAGEVIEWS).date_range("7d")
 
     result = await client.query(query)
 
@@ -64,6 +64,7 @@ async def test_async_client_query_with_dimensions() -> None:
         .metrics(Metric.VISITORS)
         .dimensions(Dimension.VISIT_COUNTRY)
         .order_by(Metric.VISITORS, "desc")
+        .date_range("7d")
     )
 
     result = await client.query(query)
@@ -82,7 +83,7 @@ async def test_async_client_authentication_error() -> None:
     )
 
     client = AsyncClient(api_key="invalid-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(AuthenticationError):
         await client.query(query)
@@ -105,7 +106,7 @@ async def test_async_client_rate_limit_error(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         await client.query(query)
@@ -127,7 +128,7 @@ async def test_async_client_retry_on_429() -> None:
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     result = await client.query(query)
 
@@ -186,7 +187,7 @@ async def test_async_self_hosted_base_url() -> None:
     )
 
     client = AsyncClient(api_key="test-key", base_url="https://analytics.company.com")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     await client.query(query)
 

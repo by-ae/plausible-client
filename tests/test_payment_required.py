@@ -23,7 +23,7 @@ def test_client_payment_required_error() -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(PaymentRequiredError) as exc_info:
         client.query(query)
@@ -43,7 +43,7 @@ async def test_async_client_payment_required_error() -> None:
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(PaymentRequiredError) as exc_info:
         await client.query(query)

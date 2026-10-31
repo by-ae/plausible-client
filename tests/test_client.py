@@ -34,7 +34,7 @@ def test_client_query_success() -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS, Metric.PAGEVIEWS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS, Metric.PAGEVIEWS).date_range("7d")
 
     result = client.query(query)
 
@@ -88,7 +88,7 @@ def test_client_authentication_error() -> None:
     )
 
     client = Client(api_key="invalid-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(AuthenticationError):
         client.query(query)
@@ -104,7 +104,7 @@ def test_client_invalid_query_error() -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics("invalid_metric")
+    query = QueryBuilder("example.com").metrics("invalid_metric").date_range("7d")
 
     with pytest.raises(InvalidQueryError) as exc_info:
         client.query(query)
@@ -122,7 +122,7 @@ def test_client_rate_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(RateLimitError) as exc_info:
         client.query(query)
@@ -137,7 +137,7 @@ def test_client_server_error() -> None:
     respx.post("https://plausible.io/api/v2/query").mock(return_value=httpx.Response(503))
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(ServerError):
         client.query(query)
@@ -155,7 +155,7 @@ def test_client_retry_on_500() -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     result = client.query(query)
 
@@ -208,7 +208,7 @@ def test_self_hosted_base_url() -> None:
     )
 
     client = Client(api_key="test-key", base_url="https://analytics.company.com/")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     client.query(query)
 
