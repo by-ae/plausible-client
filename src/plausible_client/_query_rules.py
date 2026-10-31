@@ -39,6 +39,7 @@ def validate_query(
     _validate_metric_requirements(metrics, dimensions, filters)
     _validate_metric_dimension_conflict(metrics, dimensions)
     _validate_toplevel_filters(filters)
+    _validate_conversion_property_filters(metrics, filters)
 
 
 def _validate_order_by(
@@ -107,6 +108,25 @@ def _validate_metric_dimension_conflict(metrics: list[str], dimensions: list[str
             f"{_join(event_metrics)} cannot be queried along with "
             f"session dimension {_join(session_dimensions)}"
         )
+
+
+def _validate_conversion_property_filters(metrics: list[str], filters: list[Any]) -> None:
+    """Match validate_special_metrics_filters/1.
+
+    dimensions_used_in_filters(min_depth: 1) includes behavioral filters.
+    A custom property filter at depth 0 is allowed.
+    """
+    if not any(metric in ("conversion_rate", "group_conversion_rate") for metric in metrics):
+        return
+    for leaf, depth, _behavioral in _iter_leaves(filters):
+        if depth < 1 or len(leaf) < 2:
+            continue
+        dimension = leaf[1]
+        if isinstance(dimension, str) and dimension.startswith("event:props:"):
+            raise ValueError(
+                "conversion_rate and group_conversion_rate only allow "
+                "custom property filters at the top level"
+            )
 
 
 def _validate_toplevel_filters(filters: list[Any]) -> None:

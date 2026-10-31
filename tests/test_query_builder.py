@@ -681,6 +681,43 @@ def test_views_per_visit_restrictions() -> None:
     assert payload["dimensions"] == ["time:day"]
 
 
+def test_conversion_rate_rejects_nested_custom_property_filters() -> None:
+    """Custom property filters under and, or, not, or has_done fail conversion rates."""
+    nested = any_of(
+        filter_clause(Dimension.event_property("plan"), "is", "pro"),
+        filter_clause(Dimension.VISIT_SOURCE, "is", "Google"),
+    )
+    with pytest.raises(ValueError, match="top level"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.CONVERSION_RATE)
+            .date_range("7d")
+            .filter(Dimension.EVENT_GOAL, "is", "Signup")
+            .where(nested)
+            .build()
+        )
+
+    with pytest.raises(ValueError, match="top level"):
+        (
+            QueryBuilder("example.com")
+            .metrics(Metric.GROUP_CONVERSION_RATE)
+            .date_range("7d")
+            .dimensions(Dimension.EVENT_GOAL)
+            .where(has_done(filter_clause(Dimension.event_property("plan"), "is", "pro")))
+            .build()
+        )
+
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.CONVERSION_RATE)
+        .date_range("7d")
+        .filter(Dimension.EVENT_GOAL, "is", "Signup")
+        .filter(Dimension.event_property("plan"), "is", "pro")
+        .build()
+    )
+    assert payload["filters"][1][1] == "event:props:plan"
+
+
 def test_goal_and_hostname_filters_stay_at_the_top_level() -> None:
     """Nested event:goal and event:hostname filters are rejected."""
     with pytest.raises(ValueError, match="top level"):
