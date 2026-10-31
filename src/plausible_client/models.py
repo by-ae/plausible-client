@@ -214,10 +214,16 @@ class EventResult:
     ``revenue_discarded`` is true when revenue was sent but ingestion will
     store the event without it. Invalid currency or amount does not change
     the HTTP 202 response and does not set a header.
+
+    ``ip`` is set only for ``send_event(debug=True)`` when the server
+    answers HTTP 200 with the address it will use for visitor counting.
+    That request is not recorded. A server that ignores ``X-Debug-Request``
+    returns HTTP 202, records the event, and leaves ``ip`` unset.
     """
 
     dropped: bool = False
     revenue_discarded: bool = False
+    ip: str | None = None
 
 
 @dataclass

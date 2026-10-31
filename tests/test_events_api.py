@@ -56,6 +56,85 @@ def test_send_event_sets_cf_connecting_ip() -> None:
 
 
 @respx.mock
+def test_send_event_debug_returns_the_ip_plausible_will_use() -> None:
+    """X-Debug-Request returns HTTP 200 text/plain and does not record the event."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(
+            200, text="203.0.113.5\n", headers={"content-type": "text/plain"}
+        )
+    )
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/docs",
+        x_forwarded_for="203.0.113.5",
+        debug=True,
+    )
+
+    assert result == EventResult(dropped=False, ip="203.0.113.5")
+    assert route.calls.last.request.headers["X-Debug-Request"] == "true"
+
+
+@respx.mock
+def test_send_event_omits_debug_header_by_default() -> None:
+    """A normal event is not marked as a debug request."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/docs",
+    )
+
+    assert result.ip is None
+    assert "x-debug-request" not in route.calls.last.request.headers
+
+
+@respx.mock
+def test_debug_request_ignored_by_the_server_leaves_ip_unset() -> None:
+    """HTTP 202 means the header was ignored and the event was recorded."""
+    respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202, text="ok"))
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/docs",
+        debug=True,
+    )
+
+    assert result.ip is None
+    assert result.dropped is False
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_send_event_debug_returns_the_ip() -> None:
+    """The async client reads the same debug response."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(200, text="198.51.100.9")
+    )
+
+    client = AsyncClient(api_key="test-key")
+    result = await client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/docs",
+        cf_connecting_ip="198.51.100.9",
+        debug=True,
+    )
+
+    assert result.ip == "198.51.100.9"
+    assert route.calls.last.request.headers["X-Debug-Request"] == "true"
+    await client.close()
+
+
+@respx.mock
 def test_send_event_omits_cf_connecting_ip_by_default() -> None:
     """Existing callers do not start sending a Cloudflare header."""
     route = respx.post("https://plausible.io/api/event").mock(

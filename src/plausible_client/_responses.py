@@ -56,6 +56,20 @@ def raise_for_status(response: httpx.Response, *, invalid_message: str) -> NoRet
     )
 
 
+def debug_visitor_ip(response: httpx.Response) -> str | None:
+    """Return the IP from an Events API debug response.
+
+    ``X-Debug-Request: true`` is answered with HTTP 200 and a ``text/plain``
+    body that is the address used for visitor counting. The event is not
+    recorded. Any other status, including the normal HTTP 202, means the
+    header was not honoured.
+    """
+    if response.status_code != 200:
+        return None
+    text = response.text.strip()
+    return text or None
+
+
 def event_was_dropped(response: httpx.Response) -> bool:
     """Return whether the Events API discarded the event.
 

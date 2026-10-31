@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud returns HTTP 200 with the IP it will use for visitor counting and does not record the event. `EventResult.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset
 - `list_all_sites()`, `list_all_goals()`, `list_all_guests()`, and `list_all_teams()` follow the Sites API `after` cursor until it is null. Page size must be from 1 to 100, because a larger `limit` is ignored
 - `Dimension.VISIT_SCREEN` (`visit:screen`) for screen-size breakdowns
 - `QueryBuilder.include(trim_relative_date_range=True)` drops empty time after the current moment for `day`, `month`, and `year` date ranges

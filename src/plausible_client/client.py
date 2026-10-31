@@ -6,7 +6,12 @@ import httpx
 
 from plausible_client._events import revenue_discarded, validate_event
 from plausible_client._pages import check_list_limit, check_page_size, collect_pages
-from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
+from plausible_client._responses import (
+    debug_visitor_ip,
+    event_was_dropped,
+    raise_for_status,
+    was_deleted,
+)
 from plausible_client._retry import retry_sync
 from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
 from plausible_client.query import QueryBuilder, check_query_page_size
@@ -143,6 +148,7 @@ class Client:
         referrer: str | None = None,
         interactive: bool | None = None,
         cf_connecting_ip: str | None = None,
+        debug: bool = False,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -172,12 +178,18 @@ class Client:
                 Plausible uses this address instead of ``X-Forwarded-For`` when
                 the header is present. Set it when the request passes through
                 Cloudflare, which may otherwise fill the header with the proxy IP.
+            debug: Send ``X-Debug-Request: true``. Plausible Cloud answers
+                HTTP 200 with the IP it will use for visitor counting and
+                does not record the event. ``EventResult.ip`` is that
+                address. A server that ignores the header still records the
+                event, returns HTTP 202, and leaves ``ip`` unset.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
             HTTP 202 in that case. ``revenue_discarded`` is true when the
-            revenue object will not be stored.
+            revenue object will not be stored. ``ip`` is set for a debug
+            response.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -202,6 +214,8 @@ class Client:
             headers["X-Forwarded-For"] = x_forwarded_for
         if cf_connecting_ip:
             headers["CF-Connecting-IP"] = cf_connecting_ip
+        if debug:
+            headers["X-Debug-Request"] = "true"
 
         payload: dict[str, Any] = {
             "domain": domain,
@@ -228,7 +242,11 @@ class Client:
             headers=headers,
         )
         self._handle_response(response)
-        return EventResult(dropped=event_was_dropped(response), revenue_discarded=discarded_revenue)
+        return EventResult(
+            dropped=event_was_dropped(response),
+            revenue_discarded=discarded_revenue,
+            ip=debug_visitor_ip(response) if debug else None,
+        )
 
     def list_sites(
         self,

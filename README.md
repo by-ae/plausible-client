@@ -135,7 +135,20 @@ result = client.send_event(
 )
 if result.dropped:
     print("Event was dropped (see the x-plausible-dropped response header)")
+
+# See which IP Plausible will use. The event is not recorded.
+# Plausible Cloud returns HTTP 200 and the address as text.
+result = client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/docs",
+    x_forwarded_for="203.0.113.5",
+    debug=True,
+)
+print(result.ip)
 ```
+
+`send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud answers HTTP 200 with the IP it will use for visitor counting and does not record the event. `result.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset.
 
 `send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
