@@ -4,7 +4,12 @@ from typing import Any
 
 import httpx
 
-from plausible_client._events import engagement_fields, revenue_discarded, validate_event
+from plausible_client._events import (
+    engagement_fields,
+    props_discarded,
+    revenue_discarded,
+    validate_event,
+)
 from plausible_client._pages import check_list_limit, check_page_size, collect_pages
 from plausible_client._responses import (
     debug_visitor_ip,
@@ -169,7 +174,9 @@ class Client:
             x_forwarded_for: X-Forwarded-For header for visitor IP (recommended)
             props: Custom properties. The API stores at most 30 and discards
                 the rest. Keys are limited to 300 bytes and values to 2000
-                bytes. Blank values are discarded.
+                bytes. Blank and nested values are discarded.
+                ``EventResult.props_discarded`` reports that. A non-finite
+                number or null is rejected before the request.
             revenue: Revenue object with ``currency`` and ``amount``.
                 ``currency`` is a current ISO 4217 code such as ``"USD"``.
                 ``amount`` is a number or a numeric string. An invalid
@@ -202,7 +209,8 @@ class Client:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
             HTTP 202 in that case. ``revenue_discarded`` is true when the
-            revenue object will not be stored. ``ip`` is set for a debug
+            revenue object will not be stored. ``props_discarded`` is true
+            when a property will not be stored. ``ip`` is set for a debug
             response.
 
         Raises:
@@ -223,6 +231,7 @@ class Client:
             engagement_time=engagement_time,
         )
         discarded_revenue = revenue_discarded(revenue)
+        discarded_props = props_discarded(name, props)
         headers: dict[str, str] = {}
         if user_agent:
             headers["User-Agent"] = user_agent
@@ -270,6 +279,7 @@ class Client:
             dropped=event_was_dropped(response),
             revenue_discarded=discarded_revenue,
             ip=debug_visitor_ip(response) if debug else None,
+            props_discarded=discarded_props,
         )
 
     def list_sites(

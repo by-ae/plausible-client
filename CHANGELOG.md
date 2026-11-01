@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `send_event()` sets `EventResult.props_discarded` when a property is blank, nested, or past the 30 the Events API stores. `404`, `Form: Submission`, and `WP Form Completions` count the `path` property the API adds toward that limit. A non-finite value, null, or non-string key is rejected before the request
 - `case_sensitive` is accepted on `is_not` and `contains_not`. The public query schema allows that modifier on those operators, and the stats SQL applies it. It stays rejected for pattern operators and for `visit:city` and `segment`, whose clauses are integers
 - `query_all()` keeps response `meta` when a page has no rows. `time_labels`, import info, and `metric_warnings` were dropped for an empty result
 - `QueryBuilder.build()` rejects a query that omits `metrics` or `date_range`. The public query schema requires both

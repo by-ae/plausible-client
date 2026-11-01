@@ -521,3 +521,142 @@ async def test_async_send_event_flags_discarded_revenue() -> None:
 
     assert result.revenue_discarded is True
     await client.close()
+
+
+@respx.mock
+def test_send_event_flags_properties_the_api_drops() -> None:
+    """Blank, nested, and extra properties are dropped without failing the request."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+    client = Client(api_key="test-key")
+
+    blank = client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props={"author": "   ", "plan": "pro"},
+    )
+    nested = client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props={"plan": "pro", "meta": {"a": 1}},  # type: ignore[dict-item]
+    )
+    extra = {f"k{i}": str(i) for i in range(31)}
+    overflow = client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props=extra,
+    )
+    kept = client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props={"n": 0, "flag": False, "label": "a"},
+    )
+
+    assert blank.props_discarded is True
+    assert nested.props_discarded is True
+    assert overflow.props_discarded is True
+    assert kept.props_discarded is False
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["props"]["n"] == 0
+    assert sent["props"]["flag"] is False
+
+
+@respx.mock
+def test_send_event_counts_the_path_property_added_for_system_events() -> None:
+    """404, form, and WP events gain a path property before the 30 cap."""
+    respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202, text="ok"))
+    client = Client(api_key="test-key")
+
+    thirty = {f"k{i}": i for i in range(30)}
+    dropped = client.send_event(
+        domain="example.com",
+        name="404",
+        url="https://example.com/missing",
+        props=thirty,
+    )
+    kept = client.send_event(
+        domain="example.com",
+        name="404",
+        url="https://example.com/missing",
+        props={f"k{i}": i for i in range(29)},
+    )
+    explicit = dict(thirty)
+    explicit["path"] = "/missing"
+    explicit.pop("k0")
+    with_path = client.send_event(
+        domain="example.com",
+        name="Form: Submission",
+        url="https://example.com/contact",
+        props=explicit,
+    )
+
+    assert dropped.props_discarded is True
+    assert kept.props_discarded is False
+    assert with_path.props_discarded is False
+    assert len(explicit) == 30
+
+
+@respx.mock
+def test_send_event_drops_a_long_blank_property_instead_of_rejecting_it() -> None:
+    """Length limits apply to stored values. A blank value is removed first."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props={"note": " " * 2500, "plan": "pro"},
+    )
+
+    assert result.props_discarded is True
+    assert "note" in json.loads(route.calls.last.request.content)["props"]
+
+
+def test_send_event_rejects_property_values_that_are_not_json() -> None:
+    """Null crashes property stringification, and NaN is not valid JSON."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="finite"):
+        client.send_event(
+            domain="example.com",
+            name="signup",
+            url="https://example.com/signup",
+            props={"score": float("nan")},
+        )
+    with pytest.raises(ValueError, match="boolean"):
+        client.send_event(
+            domain="example.com",
+            name="signup",
+            url="https://example.com/signup",
+            props={"score": None},  # type: ignore[dict-item]
+        )
+    with pytest.raises(ValueError, match="keys"):
+        client.send_event(
+            domain="example.com",
+            name="signup",
+            url="https://example.com/signup",
+            props={1: "a"},  # type: ignore[dict-item]
+        )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_send_event_flags_discarded_properties() -> None:
+    """The async client reports the same property outcome."""
+    respx.post("https://plausible.io/api/event").mock(return_value=httpx.Response(202, text="ok"))
+    client = AsyncClient(api_key="test-key")
+    result = await client.send_event(
+        domain="example.com",
+        name="signup",
+        url="https://example.com/signup",
+        props={"author": ""},
+    )
+    assert result.props_discarded is True
+    await client.close()

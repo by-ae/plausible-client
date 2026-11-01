@@ -163,7 +163,7 @@ print(result.ip)
 
 `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud answers HTTP 200 with the IP it will use for visitor counting and does not record the event. `result.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset.
 
-`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
+`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank or nested values are discarded. `result.props_discarded` reports that. `404`, `Form: Submission`, and `WP Form Completions` also count the `path` property the API adds from the URL. A non-finite property value or null is rejected before the request, because it is not valid JSON.
 
 Revenue needs a current ISO 4217 `currency` such as `"USD"` or `"EUR"`, and an `amount` that is a number or a numeric string. A lowercase code or any other invalid currency or amount does not fail the request: the event is recorded, the API returns HTTP 202, and only the revenue is discarded. `result.revenue_discarded` reports that. There is no response header for it. A non-finite amount is rejected before the request, because it is not valid JSON.
 

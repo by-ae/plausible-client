@@ -16,6 +16,12 @@ MAX_EVENT_NAME_LENGTH = 120
 # stringifying each value.
 MAX_PROP_KEY_BYTES = 300
 MAX_PROP_VALUE_BYTES = 2000
+# Plausible.Ingestion.Request @max_props. Extra keys are dropped after
+# blank and nested values are removed.
+MAX_PROPS = 30
+# Plausible.Event.SystemEvents.events_with_path_prop/0. When "path" is
+# not already present, the pathname is inserted before the 30 cap.
+PATH_PROP_EVENTS = frozenset({"404", "WP Form Completions", "Form: Submission"})
 
 # Plausible.Event.SystemEvents.events_with_interactive_always_true/0.
 # interactive: false is ignored for these names.
@@ -145,12 +151,76 @@ def _require_engagement_time(value: object) -> int:
 
 
 def _validate_props(props: dict[str, PropValue]) -> None:
+    if not isinstance(props, dict):
+        raise ValueError("props must be an object")
     for key, value in props.items():
+        if not isinstance(key, str):
+            raise ValueError("property keys must be strings")
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError(
+                f"property {key!r} must be a finite number. "
+                "A non-finite value is not valid JSON and the event is not recorded."
+            )
+        if value is None:
+            raise ValueError(f"property {key!r} must be a string, number, or boolean")
+        if isinstance(value, (list, dict, tuple)):
+            # Valid JSON. Ingestion drops these keys and still records the event.
+            continue
+        if not isinstance(value, (str, int, float)):
+            raise ValueError(f"property {key!r} must be a string, number, or boolean")
+        if not _prop_is_stored(key, value):
+            continue
         if len(key.encode("utf-8")) > MAX_PROP_KEY_BYTES:
             raise ValueError(f"property key {key!r} is longer than {MAX_PROP_KEY_BYTES} bytes")
         stored = _stored_prop_text(value)
         if len(stored.encode("utf-8")) > MAX_PROP_VALUE_BYTES:
             raise ValueError(f"property {key!r} is longer than {MAX_PROP_VALUE_BYTES} bytes")
+
+
+def props_discarded(name: str, props: dict[str, PropValue] | None) -> bool:
+    """Return whether ingestion will store the event without some properties.
+
+    Blank keys and values are removed. Lists and objects are removed.
+    At most 30 properties are kept. ``404``, ``WP Form Completions``, and
+    ``Form: Submission`` also receive a ``path`` property copied from the
+    URL when the caller did not send one, and that counts toward the 30.
+    """
+    if not props:
+        return False
+    kept = 0
+    saw_path = False
+    dropped = False
+    for key, value in props.items():
+        if isinstance(key, str) and _prop_is_stored(key, value):
+            kept += 1
+            if key == "path":
+                saw_path = True
+        else:
+            dropped = True
+    if name in PATH_PROP_EVENTS and not saw_path:
+        kept += 1
+    return dropped or kept > MAX_PROPS
+
+
+def _prop_is_stored(key: str, value: object) -> bool:
+    """Return whether filter_bad_props/2 keeps this pair.
+
+    A value is blank when ``String.trim_leading(to_string(value))`` is empty.
+    ``false`` and ``0`` are kept. Nested values are not.
+    """
+    if _leading_blank(key):
+        return False
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, str):
+        return not _leading_blank(value)
+    if isinstance(value, (int, float)):
+        return True
+    return False
+
+
+def _leading_blank(value: str) -> bool:
+    return value.lstrip() == ""
 
 
 # Decimal.parse/1 succeeds when a numeric prefix is present and ignores the rest.

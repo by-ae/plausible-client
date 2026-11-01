@@ -232,11 +232,16 @@ class EventResult:
     answers HTTP 200 with the address it will use for visitor counting.
     That request is not recorded. A server that ignores ``X-Debug-Request``
     returns HTTP 202, records the event, and leaves ``ip`` unset.
+
+    ``props_discarded`` is true when a property will not be stored: a blank
+    key or value, a nested value, or a property past the 30 that are kept.
+    There is no response header for it.
     """
 
     dropped: bool = False
     revenue_discarded: bool = False
     ip: str | None = None
+    props_discarded: bool = False
 
 
 @dataclass
