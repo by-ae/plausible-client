@@ -93,7 +93,9 @@ class AsyncClient:
                 default 1000. A boolean or a float is rejected.
 
         Returns:
-            QueryResult with all results combined
+            QueryResult with all results combined. ``meta`` is kept from the
+            responses, including when the first page has no rows, so
+            ``time_labels`` and ``metric_warnings`` are not dropped.
 
         Raises:
             ValueError: If page_size is not an integer from 1 to 10000
@@ -108,6 +110,7 @@ class AsyncClient:
         all_results: list[dict[str, Any]] = []
         offset = 0
         combined_meta: dict[str, Any] = {}
+        have_meta = False
 
         while True:
             page_query = query_builder.copy()
@@ -117,15 +120,18 @@ class AsyncClient:
 
             result = await self.query(page_query)
 
+            # An empty page is a normal response for a range with no data.
+            # It still carries time_labels, import info, and metric warnings.
+            if not have_meta:
+                combined_meta = result.meta.copy()
+                have_meta = True
+            else:
+                combined_meta.update(result.meta)
+
             if not result.results:
                 break
 
             all_results.extend(result.results)
-
-            if not combined_meta:
-                combined_meta = result.meta.copy()
-            else:
-                combined_meta.update(result.meta)
 
             total_rows = result.meta.get("total_rows")
             if total_rows is None or offset + page_size >= total_rows:

@@ -327,6 +327,7 @@ for row in result.results:
 The `query_all()` method:
 - Automatically makes multiple requests to fetch all results
 - Combines results from all pages into a single QueryResult
+- Keeps `meta` from those responses. A range with no rows still returns `time_labels`, import info, and `metric_warnings`
 - Defaults to 1000 results per page. ``page_size`` must be an integer from 1 to 10000. A boolean or a float is rejected, because the query schema requires an integer limit
 - Works with both `Client` and `AsyncClient`
 

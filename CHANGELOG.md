@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `query_all()` keeps response `meta` when a page has no rows. `time_labels`, import info, and `metric_warnings` were dropped for an empty result
 - `QueryBuilder.build()` rejects a query that omits `metrics` or `date_range`. The public query schema requires both
 - `conversion_rate` and `group_conversion_rate` reject a custom property filter that is nested under `and`, `or`, `not`, or a behavioral filter. A top-level `event:props:` filter is still allowed
 - Sites API list calls reject a `limit` outside 1 to 100. The pagination helper ignores any other value and returns the default page. `query_all()` rejects a boolean or float `page_size`, which the query schema does not accept as `pagination.limit`
