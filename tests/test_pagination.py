@@ -120,6 +120,70 @@ def test_query_all_empty_results(respx_mock: MockRouter) -> None:
 
 
 @respx.mock
+def test_query_all_keeps_meta_when_there_are_no_rows(respx_mock: MockRouter) -> None:
+    """An empty page still carries warnings and time labels."""
+    client = Client(api_key="test-key")
+    warning = {
+        "code": "no_revenue_goals_matching",
+        "warning": "Revenue metrics are null as there are no matching revenue goals.",
+    }
+
+    respx_mock.post("https://plausible.io/api/v2/query").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [],
+                "meta": {
+                    "total_rows": 0,
+                    "time_labels": ["2024-01-01", "2024-01-02"],
+                    "metric_warnings": {"total_revenue": warning},
+                },
+            },
+        )
+    )
+
+    query = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS, Metric.TOTAL_REVENUE)
+        .dimensions(Dimension.TIME_DAY)
+        .date_range("7d")
+        .include(time_labels=True, total_rows=True)
+    )
+
+    result = client.query_all(query)
+
+    assert result.results == []
+    assert result.meta["total_rows"] == 0
+    assert result.meta["time_labels"] == ["2024-01-01", "2024-01-02"]
+    assert result.meta["metric_warnings"] == {"total_revenue": warning}
+    assert len(respx_mock.calls) == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_query_all_keeps_meta_when_there_are_no_rows(respx_mock: MockRouter) -> None:
+    """The async pager keeps the same empty-page meta."""
+    respx_mock.post("https://plausible.io/api/v2/query").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [],
+                "meta": {"total_rows": 0, "imports_included": False},
+            },
+        )
+    )
+
+    client = AsyncClient(api_key="test-key")
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
+    result = await client.query_all(query)
+
+    assert result.results == []
+    assert result.meta["total_rows"] == 0
+    assert result.meta["imports_included"] is False
+    await client.close()
+
+
+@respx.mock
 def test_query_all_invalid_page_size(respx_mock: MockRouter) -> None:
     """Test query_all validates page_size."""
     client = Client(api_key="test-key")

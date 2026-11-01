@@ -126,8 +126,10 @@ class QueryBuilder:
                 ``visit:city`` takes GeoName IDs as integers. ``segment`` takes
                 integer segment ids. Other dimensions take strings.
                 ``visit:country`` with ``is`` or ``is_not`` takes 2-letter codes.
-            case_sensitive: Case-sensitivity modifier for ``is`` and ``contains``.
-                The Stats API only documents this modifier for those two operators.
+            case_sensitive: Case-sensitivity modifier for ``is``, ``is_not``,
+                ``contains``, and ``contains_not``. The query schema does not
+                allow it on pattern operators, or on ``visit:city`` and
+                ``segment``, whose clauses are integers.
         """
         clauses = normalize_clauses(value)
         filter_obj = Filter(

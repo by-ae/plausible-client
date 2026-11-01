@@ -4,7 +4,12 @@ from typing import Any
 
 import httpx
 
-from plausible_client._events import revenue_discarded, validate_event
+from plausible_client._events import (
+    engagement_fields,
+    props_discarded,
+    revenue_discarded,
+    validate_event,
+)
 from plausible_client._pages import check_list_limit, check_page_size, collect_pages
 from plausible_client._responses import (
     debug_visitor_ip,
@@ -93,7 +98,9 @@ class Client:
                 default 1000. A boolean or a float is rejected.
 
         Returns:
-            QueryResult with all results combined
+            QueryResult with all results combined. ``meta`` is kept from the
+            responses, including when the first page has no rows, so
+            ``time_labels`` and ``metric_warnings`` are not dropped.
 
         Raises:
             ValueError: If page_size is not an integer from 1 to 10000
@@ -108,6 +115,7 @@ class Client:
         all_results: list[dict[str, Any]] = []
         offset = 0
         combined_meta: dict[str, Any] = {}
+        have_meta = False
 
         while True:
             page_query = query_builder.copy()
@@ -117,15 +125,18 @@ class Client:
 
             result = self.query(page_query)
 
+            # An empty page is a normal response for a range with no data.
+            # It still carries time_labels, import info, and metric warnings.
+            if not have_meta:
+                combined_meta = result.meta.copy()
+                have_meta = True
+            else:
+                combined_meta.update(result.meta)
+
             if not result.results:
                 break
 
             all_results.extend(result.results)
-
-            if not combined_meta:
-                combined_meta = result.meta.copy()
-            else:
-                combined_meta.update(result.meta)
 
             total_rows = result.meta.get("total_rows")
             if total_rows is None or offset + page_size >= total_rows:
@@ -149,6 +160,8 @@ class Client:
         interactive: bool | None = None,
         cf_connecting_ip: str | None = None,
         debug: bool = False,
+        scroll_depth: int | None = None,
+        engagement_time: int | None = None,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -161,7 +174,9 @@ class Client:
             x_forwarded_for: X-Forwarded-For header for visitor IP (recommended)
             props: Custom properties. The API stores at most 30 and discards
                 the rest. Keys are limited to 300 bytes and values to 2000
-                bytes. Blank values are discarded.
+                bytes. Blank and nested values are discarded.
+                ``EventResult.props_discarded`` reports that. A non-finite
+                number or null is rejected before the request.
             revenue: Revenue object with ``currency`` and ``amount``.
                 ``currency`` is a current ISO 4217 code such as ``"USD"``.
                 ``amount`` is a number or a numeric string. An invalid
@@ -183,12 +198,19 @@ class Client:
                 does not record the event. ``EventResult.ip`` is that
                 address. A server that ignores the header still records the
                 event, returns HTTP 202, and leaves ``ip`` unset.
+            scroll_depth: Scroll percentage for an ``engagement`` event.
+                An integer from 0 to 100, sent as ``sd``. The API stores a
+                larger value as 100, so it is rejected here.
+            engagement_time: Engaged time in milliseconds for an
+                ``engagement`` event, sent as ``e``. 0 does not count on
+                its own. A value of 30 days or more is ignored by the API.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
             HTTP 202 in that case. ``revenue_discarded`` is true when the
-            revenue object will not be stored. ``ip`` is set for a debug
+            revenue object will not be stored. ``props_discarded`` is true
+            when a property will not be stored. ``ip`` is set for a debug
             response.
 
         Raises:
@@ -205,8 +227,11 @@ class Client:
             url=url,
             interactive=interactive,
             props=props,
+            scroll_depth=scroll_depth,
+            engagement_time=engagement_time,
         )
         discarded_revenue = revenue_discarded(revenue)
+        discarded_props = props_discarded(name, props)
         headers: dict[str, str] = {}
         if user_agent:
             headers["User-Agent"] = user_agent
@@ -235,6 +260,14 @@ class Client:
         if interactive is not None:
             payload["interactive"] = interactive
 
+        payload.update(
+            engagement_fields(
+                name=name,
+                scroll_depth=scroll_depth,
+                engagement_time=engagement_time,
+            )
+        )
+
         response = retry_sync(
             self._client.post,
             f"{self.base_url}/api/event",
@@ -246,6 +279,7 @@ class Client:
             dropped=event_was_dropped(response),
             revenue_discarded=discarded_revenue,
             ip=debug_visitor_ip(response) if debug else None,
+            props_discarded=discarded_props,
         )
 
     def list_sites(

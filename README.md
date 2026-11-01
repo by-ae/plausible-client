@@ -123,6 +123,19 @@ client.send_event(
     cf_connecting_ip="203.0.113.5",
 )
 
+# Scroll depth and time on page are recorded as an engagement event.
+# sd is an integer from 0 to 100. e is engaged time in milliseconds.
+# The API rejects the event when both are missing. An engagement_time
+# of 0 does not count on its own. Other event names ignore these fields,
+# so passing them there is rejected.
+client.send_event(
+    domain="example.com",
+    name="engagement",
+    url="https://example.com/docs",
+    scroll_depth=80,
+    engagement_time=12000,
+)
+
 # A non-interactive event is excluded from bounce-rate calculations.
 # This applies to custom events. pageview and other system events stay
 # interactive, and interactive=False is rejected for those names.
@@ -150,7 +163,7 @@ print(result.ip)
 
 `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud answers HTTP 200 with the IP it will use for visitor counting and does not record the event. `result.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset.
 
-`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
+`send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank or nested values are discarded. `result.props_discarded` reports that. `404`, `Form: Submission`, and `WP Form Completions` also count the `path` property the API adds from the URL. A non-finite property value or null is rejected before the request, because it is not valid JSON.
 
 Revenue needs a current ISO 4217 `currency` such as `"USD"` or `"EUR"`, and an `amount` that is a number or a numeric string. A lowercase code or any other invalid currency or amount does not fail the request: the event is recorded, the API returns HTTP 202, and only the revenue is discarded. `result.revenue_discarded` reports that. There is no response header for it. A non-finite amount is rejected before the request, because it is not valid JSON.
 
@@ -241,8 +254,10 @@ query = (
     .filter(Dimension.VISIT_CITY, "is", 4347778)
     # Saved segments take an integer id: .filter("segment", "is", 123)
     .filter(Dimension.EVENT_PAGE, "contains", "/blog/")
-    # Case-insensitive match (Stats API modifier for "is" and "contains")
+    # Case-insensitive match. The query schema allows this modifier on
+    # "is", "is_not", "contains", and "contains_not".
     .filter(Dimension.VISIT_COUNTRY_NAME, "contains", "united", case_sensitive=False)
+    .filter(Dimension.VISIT_SOURCE, "is_not", "Google", case_sensitive=False)
     # Custom date range. Presets also work: .date_range("7d")
     .date_range(date(2024, 1, 1), date(2024, 1, 31))
     # Ordering
@@ -327,6 +342,7 @@ for row in result.results:
 The `query_all()` method:
 - Automatically makes multiple requests to fetch all results
 - Combines results from all pages into a single QueryResult
+- Keeps `meta` from those responses. A range with no rows still returns `time_labels`, import info, and `metric_warnings`
 - Defaults to 1000 results per page. ``page_size`` must be an integer from 1 to 10000. A boolean or a float is rejected, because the query schema requires an integer limit
 - Works with both `Client` and `AsyncClient`
 
