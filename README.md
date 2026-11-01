@@ -241,8 +241,10 @@ query = (
     .filter(Dimension.VISIT_CITY, "is", 4347778)
     # Saved segments take an integer id: .filter("segment", "is", 123)
     .filter(Dimension.EVENT_PAGE, "contains", "/blog/")
-    # Case-insensitive match (Stats API modifier for "is" and "contains")
+    # Case-insensitive match. The query schema allows this modifier on
+    # "is", "is_not", "contains", and "contains_not".
     .filter(Dimension.VISIT_COUNTRY_NAME, "contains", "united", case_sensitive=False)
+    .filter(Dimension.VISIT_SOURCE, "is_not", "Google", case_sensitive=False)
     # Custom date range. Presets also work: .date_range("7d")
     .date_range(date(2024, 1, 1), date(2024, 1, 31))
     # Ordering

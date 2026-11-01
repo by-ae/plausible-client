@@ -347,12 +347,39 @@ def test_query_builder_case_insensitive_filter() -> None:
     ]
 
 
+def test_query_builder_case_sensitive_on_exclusion_filters() -> None:
+    """The query schema allows the modifier on is_not and contains_not."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .filter(Dimension.VISIT_COUNTRY_NAME, "is_not", "Germany", case_sensitive=False)
+        .filter(Dimension.EVENT_PAGE, "contains_not", "/Blog", case_sensitive=False)
+        .build()
+    )
+
+    assert payload["filters"] == [
+        ["is_not", "visit:country_name", ["Germany"], {"case_sensitive": False}],
+        ["contains_not", "event:page", ["/Blog"], {"case_sensitive": False}],
+    ]
+
+
 def test_query_builder_case_sensitive_rejected_for_other_operators() -> None:
-    """The modifier is not documented for operators other than is and contains."""
+    """Pattern operators have no modifier in the query schema."""
     with pytest.raises(ValueError, match="case_sensitive"):
         QueryBuilder("example.com").filter(
             Dimension.EVENT_PAGE, "matches", "^/user/", case_sensitive=False
         )
+
+
+def test_query_builder_case_sensitive_rejected_for_integer_clauses() -> None:
+    """visit:city and segment clauses are integers, so casing does not apply."""
+    with pytest.raises(ValueError, match="visit:city"):
+        QueryBuilder("example.com").filter(
+            Dimension.VISIT_CITY, "is", 4347778, case_sensitive=False
+        )
+    with pytest.raises(ValueError, match="segment"):
+        filter_clause("segment", "is", 123, case_sensitive=False)
 
 
 def test_any_of_matches_the_documented_or_filter() -> None:

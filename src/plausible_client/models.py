@@ -103,7 +103,12 @@ class Filter:
         [operator, dimension, clauses, {"case_sensitive": bool}].
 
         Maps deprecated 'does_not_contain' to 'contains_not' for API compatibility.
-        The case_sensitive modifier is documented for ``is`` and ``contains`` only.
+
+        The public query schema allows ``case_sensitive`` on ``is``, ``is_not``,
+        ``contains``, and ``contains_not``. The stats SQL applies it for those
+        operators. Pattern operators have no modifier. ``visit:city`` and
+        ``segment`` clauses are integers, and the case-insensitive path calls
+        ``String.downcase`` on each clause.
         """
         validate_filter_target(self.dimension, self.operator)
         operator = self.operator
@@ -116,8 +121,16 @@ class Filter:
             self.clauses,
         ]
         if self.case_sensitive is not None:
-            if operator not in ("is", "contains"):
-                raise ValueError("case_sensitive is only valid for 'is' and 'contains' filters")
+            if operator not in ("is", "is_not", "contains", "contains_not"):
+                raise ValueError(
+                    "case_sensitive is only valid for 'is', 'is_not', "
+                    "'contains', and 'contains_not' filters"
+                )
+            if self.dimension in ("visit:city", "segment"):
+                raise ValueError(
+                    f"case_sensitive is not valid for {self.dimension} filters. "
+                    "Those clauses are integers."
+                )
             result.append({"case_sensitive": self.case_sensitive})
         return result
 

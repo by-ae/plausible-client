@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `case_sensitive` is accepted on `is_not` and `contains_not`. The public query schema allows that modifier on those operators, and the stats SQL applies it. It stays rejected for pattern operators and for `visit:city` and `segment`, whose clauses are integers
 - `query_all()` keeps response `meta` when a page has no rows. `time_labels`, import info, and `metric_warnings` were dropped for an empty result
 - `QueryBuilder.build()` rejects a query that omits `metrics` or `date_range`. The public query schema requires both
 - `conversion_rate` and `group_conversion_rate` reject a custom property filter that is nested under `and`, `or`, `not`, or a behavioral filter. A top-level `event:props:` filter is still allowed
