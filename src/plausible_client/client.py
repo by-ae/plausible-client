@@ -5,11 +5,16 @@ from typing import Any
 import httpx
 
 from plausible_client._events import revenue_discarded, validate_event
-from plausible_client._pages import check_page_size, collect_pages
-from plausible_client._responses import event_was_dropped, raise_for_status, was_deleted
+from plausible_client._pages import check_list_limit, check_page_size, collect_pages
+from plausible_client._responses import (
+    debug_visitor_ip,
+    event_was_dropped,
+    raise_for_status,
+    was_deleted,
+)
 from plausible_client._retry import retry_sync
 from plausible_client.models import EventResult, Goal, Guest, QueryResult, SharedLink, Site, Team
-from plausible_client.query import QueryBuilder
+from plausible_client.query import QueryBuilder, check_query_page_size
 
 
 class Client:
@@ -84,21 +89,21 @@ class Client:
 
         Args:
             query_builder: QueryBuilder instance with the query configuration
-            page_size: Number of results per page (1 to 10000, default 1000)
+            page_size: Number of results per page. An integer from 1 to 10000,
+                default 1000. A boolean or a float is rejected.
 
         Returns:
             QueryResult with all results combined
 
         Raises:
-            ValueError: If page_size is not between 1 and 10000
+            ValueError: If page_size is not an integer from 1 to 10000
             AuthenticationError: If authentication fails
             PaymentRequiredError: If payment is required (subscription issue)
             InvalidQueryError: If the query is invalid
             RateLimitError: If rate limit is exceeded
             ServerError: If server returns 5xx error
         """
-        if not 1 <= page_size <= 10000:
-            raise ValueError(f"page_size must be between 1 and 10000, got {page_size}")
+        check_query_page_size(page_size)
 
         all_results: list[dict[str, Any]] = []
         offset = 0
@@ -143,6 +148,7 @@ class Client:
         referrer: str | None = None,
         interactive: bool | None = None,
         cf_connecting_ip: str | None = None,
+        debug: bool = False,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -172,12 +178,18 @@ class Client:
                 Plausible uses this address instead of ``X-Forwarded-For`` when
                 the header is present. Set it when the request passes through
                 Cloudflare, which may otherwise fill the header with the proxy IP.
+            debug: Send ``X-Debug-Request: true``. Plausible Cloud answers
+                HTTP 200 with the IP it will use for visitor counting and
+                does not record the event. ``EventResult.ip`` is that
+                address. A server that ignores the header still records the
+                event, returns HTTP 202, and leaves ``ip`` unset.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
             positive ``x-plausible-dropped`` count. The API still returns
             HTTP 202 in that case. ``revenue_discarded`` is true when the
-            revenue object will not be stored.
+            revenue object will not be stored. ``ip`` is set for a debug
+            response.
 
         Raises:
             AuthenticationError: If authentication fails
@@ -202,6 +214,8 @@ class Client:
             headers["X-Forwarded-For"] = x_forwarded_for
         if cf_connecting_ip:
             headers["CF-Connecting-IP"] = cf_connecting_ip
+        if debug:
+            headers["X-Debug-Request"] = "true"
 
         payload: dict[str, Any] = {
             "domain": domain,
@@ -228,7 +242,11 @@ class Client:
             headers=headers,
         )
         self._handle_response(response)
-        return EventResult(dropped=event_was_dropped(response), revenue_discarded=discarded_revenue)
+        return EventResult(
+            dropped=event_was_dropped(response),
+            revenue_discarded=discarded_revenue,
+            ip=debug_visitor_ip(response) if debug else None,
+        )
 
     def list_sites(
         self,
@@ -241,7 +259,9 @@ class Client:
         List sites accessible to this API key.
 
         Args:
-            limit: Maximum number of sites to return (default 100)
+            limit: Page size, an integer from 1 to 100 (default 100).
+                A larger value is ignored by the API and the default page
+                is returned, so it is rejected here.
             after: Pagination cursor for next page
             before: Pagination cursor for previous page
             team_id: Filter by team ID
@@ -253,6 +273,7 @@ class Client:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"limit": limit}
         if after:
             params["after"] = after
@@ -308,6 +329,7 @@ class Client:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"limit": limit}
         if after:
             params["after"] = after
@@ -478,6 +500,7 @@ class Client:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"site_id": site_id, "limit": limit}
         if after:
             params["after"] = after
@@ -694,6 +717,7 @@ class Client:
             AuthenticationError: If authentication fails
             ServerError: If server returns 5xx error
         """
+        check_list_limit(limit)
         params: dict[str, Any] = {"site_id": site_id, "limit": limit}
         if after:
             params["after"] = after

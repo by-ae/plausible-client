@@ -15,7 +15,7 @@ def test_timeout_not_retried() -> None:
     )
 
     client = Client(api_key="test-key", timeout=5.0)
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(httpx.ReadTimeout):
         client.query(query)
@@ -32,7 +32,7 @@ def test_connect_timeout_not_retried() -> None:
     )
 
     client = Client(api_key="test-key", timeout=5.0)
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(httpx.ConnectTimeout):
         client.query(query)
@@ -53,7 +53,7 @@ def test_connection_error_retried() -> None:
     )
 
     client = Client(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     result = client.query(query)
 
@@ -71,7 +71,7 @@ async def test_async_timeout_not_retried() -> None:
     )
 
     client = AsyncClient(api_key="test-key", timeout=5.0)
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     with pytest.raises(httpx.ReadTimeout):
         await client.query(query)
@@ -93,7 +93,7 @@ async def test_async_connection_error_retried() -> None:
     )
 
     client = AsyncClient(api_key="test-key")
-    query = QueryBuilder("example.com").metrics(Metric.VISITORS)
+    query = QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d")
 
     result = await client.query(query)
 

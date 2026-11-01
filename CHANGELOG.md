@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud returns HTTP 200 with the IP it will use for visitor counting and does not record the event. `EventResult.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset
 - `list_all_sites()`, `list_all_goals()`, `list_all_guests()`, and `list_all_teams()` follow the Sites API `after` cursor until it is null. Page size must be from 1 to 100, because a larger `limit` is ignored
 - `Dimension.VISIT_SCREEN` (`visit:screen`) for screen-size breakdowns
 - `QueryBuilder.include(trim_relative_date_range=True)` drops empty time after the current moment for `day`, `month`, and `year` date ranges
@@ -49,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QueryBuilder.build()` rejects a query that omits `metrics` or `date_range`. The public query schema requires both
+- `conversion_rate` and `group_conversion_rate` reject a custom property filter that is nested under `and`, `or`, `not`, or a behavioral filter. A top-level `event:props:` filter is still allowed
+- Sites API list calls reject a `limit` outside 1 to 100. The pagination helper ignores any other value and returns the default page. `query_all()` rejects a boolean or float `page_size`, which the query schema does not accept as `pagination.limit`
 - `send_event()` sets `EventResult.revenue_discarded` when the revenue currency is not a current ISO 4217 code Plausible accepts, or the amount is not a number or numeric string. The event is still sent, matching the API, which records it and drops the revenue. A non-finite amount is rejected before the request
 - `QueryBuilder.build()` rejects `order_by` entries that are not selected metrics or dimensions, `include.time_labels` without a time dimension, and metric or dimension combinations the stats query builder refuses. `event:goal` and `event:hostname` filters are rejected when nested
 - 402 responses keep the API `error` string, such as a site limit or a plan that does not include shared links or custom properties

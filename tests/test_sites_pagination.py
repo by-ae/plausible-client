@@ -65,6 +65,37 @@ def test_list_all_sites_rejects_a_repeated_cursor() -> None:
         client.list_all_sites(page_size=1)
 
 
+@pytest.mark.parametrize("limit", [0, 101, True, 1.5])
+def test_list_calls_reject_limits_the_pagination_helper_drops(limit: int) -> None:
+    """A limit outside 1 to 100 is ignored and the default page is returned."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="limit"):
+        client.list_sites(limit=limit)
+    with pytest.raises(ValueError, match="limit"):
+        client.list_teams(limit=limit)
+    with pytest.raises(ValueError, match="limit"):
+        client.list_goals("example.com", limit=limit)
+    with pytest.raises(ValueError, match="limit"):
+        client.list_guests("example.com", limit=limit)
+
+
+@pytest.mark.asyncio
+async def test_async_list_calls_reject_an_oversized_limit() -> None:
+    """The async list methods use the same limit check."""
+    client = AsyncClient(api_key="test-key")
+
+    with pytest.raises(ValueError, match="limit"):
+        await client.list_sites(limit=200)
+    with pytest.raises(ValueError, match="limit"):
+        await client.list_teams(limit=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="limit"):
+        await client.list_goals("example.com", limit=0)
+    with pytest.raises(ValueError, match="limit"):
+        await client.list_guests("example.com", limit=101)
+    await client.close()
+
+
 @pytest.mark.parametrize("page_size", [0, 101, True])
 def test_list_all_sites_rejects_page_sizes_the_api_ignores(page_size: int) -> None:
     """Limits above 100 are dropped by the pagination helper and become the default."""

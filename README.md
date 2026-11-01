@@ -135,7 +135,20 @@ result = client.send_event(
 )
 if result.dropped:
     print("Event was dropped (see the x-plausible-dropped response header)")
+
+# See which IP Plausible will use. The event is not recorded.
+# Plausible Cloud returns HTTP 200 and the address as text.
+result = client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/docs",
+    x_forwarded_for="203.0.113.5",
+    debug=True,
+)
+print(result.ip)
 ```
+
+`send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud answers HTTP 200 with the IP it will use for visitor counting and does not record the event. `result.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset.
 
 `send_event()` rejects a blank domain, an empty or 120+ character event name, a URL longer than 2000 bytes, and a `data:` URL. Property keys longer than 300 bytes and values longer than 2000 bytes are rejected too. At most 30 properties are stored; further keys are discarded by the API, and blank values are discarded.
 
@@ -148,7 +161,10 @@ from plausible_client import Client
 
 client = Client(api_key="your-sites-api-key")
 
-# List all accessible sites. One response holds at most 100 sites.
+# List all accessible sites. list_sites, list_goals, list_guests, and
+# list_teams take a limit from 1 to 100. A larger limit is ignored and the
+# default page of 100 is returned, so those calls reject it.
+# One response holds at most 100 sites.
 # meta["after"] is the next cursor, and null means there is no next page.
 sites = client.list_all_sites()
 for site in sites:
@@ -240,13 +256,13 @@ query = (
 )
 ```
 
-`date_range` is required by the Stats API. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A relative range is also accepted: `"14d"` means the last 1 to 5000 days, and `"3mo"` means the last 1 to 100 months. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
+`date_range` and `metrics` are required by the Stats API. `build()` rejects a query that omits either. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A relative range is also accepted: `"14d"` means the last 1 to 5000 days, and `"3mo"` means the last 1 to 100 months. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
 
 Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
 
 `event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`, and each entry has to be one of the query's metrics or dimensions. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique. `include.time_labels` requires a time dimension.
 
-`scroll_depth` and `time_on_page` need an `event:page` filter or dimension. A nested `event:page` filter is enough for `time_on_page`. `scroll_depth` needs that filter at the top level, or `event:page` as a dimension. `conversion_rate` and `group_conversion_rate` need an `event:goal` filter or dimension. `views_per_visit` cannot be filtered by `event:page` or broken down by a non-time dimension. `bounce_rate`, `visit_duration`, and `views_per_visit` can be broken down by `event:page` (and `event:hostname` together with `event:page`). Other event dimensions cannot be combined with those session metrics. `pageviews`, `events`, `scroll_depth`, and `time_on_page` cannot be broken down by entry or exit page. `event:goal` and `event:hostname` filters have to stay at the top level. A behavioral filter may still use `event:goal`.
+`scroll_depth` and `time_on_page` need an `event:page` filter or dimension. A nested `event:page` filter is enough for `time_on_page`. `scroll_depth` needs that filter at the top level, or `event:page` as a dimension. `conversion_rate` and `group_conversion_rate` need an `event:goal` filter or dimension. `views_per_visit` cannot be filtered by `event:page` or broken down by a non-time dimension. `bounce_rate`, `visit_duration`, and `views_per_visit` can be broken down by `event:page` (and `event:hostname` together with `event:page`). Other event dimensions cannot be combined with those session metrics. `pageviews`, `events`, `scroll_depth`, and `time_on_page` cannot be broken down by entry or exit page. `event:goal` and `event:hostname` filters have to stay at the top level. A behavioral filter may still use `event:goal`. Custom property filters (`event:props:`) also have to stay at the top level when the query uses `conversion_rate` or `group_conversion_rate`. A nested one, including inside `has_done`, is rejected.
 
 ```python
 from plausible_client import (
@@ -311,7 +327,7 @@ for row in result.results:
 The `query_all()` method:
 - Automatically makes multiple requests to fetch all results
 - Combines results from all pages into a single QueryResult
-- Defaults to 1000 results per page (configurable up to 10000)
+- Defaults to 1000 results per page. ``page_size`` must be an integer from 1 to 10000. A boolean or a float is rejected, because the query schema requires an integer limit
 - Works with both `Client` and `AsyncClient`
 
 ```python

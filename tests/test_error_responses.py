@@ -132,7 +132,7 @@ def test_non_json_400_is_invalid_query() -> None:
     client = Client(api_key="test-key")
 
     with pytest.raises(InvalidQueryError) as exc_info:
-        client.query(QueryBuilder("example.com").metrics(Metric.VISITORS))
+        client.query(QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d"))
 
     assert str(exc_info.value) == "Invalid query"
     assert exc_info.value.errors is None
@@ -162,7 +162,7 @@ def test_unexpected_status_keeps_status_code() -> None:
     client = Client(api_key="test-key")
 
     with pytest.raises(PlausibleError) as exc_info:
-        client.query(QueryBuilder("example.com").metrics(Metric.VISITORS))
+        client.query(QueryBuilder("example.com").metrics(Metric.VISITORS).date_range("7d"))
 
     assert type(exc_info.value) is PlausibleError
     assert exc_info.value.status_code == 418
