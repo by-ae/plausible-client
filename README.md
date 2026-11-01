@@ -123,6 +123,19 @@ client.send_event(
     cf_connecting_ip="203.0.113.5",
 )
 
+# Scroll depth and time on page are recorded as an engagement event.
+# sd is an integer from 0 to 100. e is engaged time in milliseconds.
+# The API rejects the event when both are missing. An engagement_time
+# of 0 does not count on its own. Other event names ignore these fields,
+# so passing them there is rejected.
+client.send_event(
+    domain="example.com",
+    name="engagement",
+    url="https://example.com/docs",
+    scroll_depth=80,
+    engagement_time=12000,
+)
+
 # A non-interactive event is excluded from bounce-rate calculations.
 # This applies to custom events. pageview and other system events stay
 # interactive, and interactive=False is rejected for those names.

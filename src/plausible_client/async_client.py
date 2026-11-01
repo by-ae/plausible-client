@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from plausible_client._events import revenue_discarded, validate_event
+from plausible_client._events import engagement_fields, revenue_discarded, validate_event
 from plausible_client._pages import check_list_limit, check_page_size, collect_pages_async
 from plausible_client._responses import (
     debug_visitor_ip,
@@ -155,6 +155,8 @@ class AsyncClient:
         interactive: bool | None = None,
         cf_connecting_ip: str | None = None,
         debug: bool = False,
+        scroll_depth: int | None = None,
+        engagement_time: int | None = None,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -189,6 +191,12 @@ class AsyncClient:
                 does not record the event. ``EventResult.ip`` is that
                 address. A server that ignores the header still records the
                 event, returns HTTP 202, and leaves ``ip`` unset.
+            scroll_depth: Scroll percentage for an ``engagement`` event.
+                An integer from 0 to 100, sent as ``sd``. The API stores a
+                larger value as 100, so it is rejected here.
+            engagement_time: Engaged time in milliseconds for an
+                ``engagement`` event, sent as ``e``. 0 does not count on
+                its own. A value of 30 days or more is ignored by the API.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
@@ -211,6 +219,8 @@ class AsyncClient:
             url=url,
             interactive=interactive,
             props=props,
+            scroll_depth=scroll_depth,
+            engagement_time=engagement_time,
         )
         discarded_revenue = revenue_discarded(revenue)
         headers: dict[str, str] = {}
@@ -240,6 +250,14 @@ class AsyncClient:
 
         if interactive is not None:
             payload["interactive"] = interactive
+
+        payload.update(
+            engagement_fields(
+                name=name,
+                scroll_depth=scroll_depth,
+                engagement_time=engagement_time,
+            )
+        )
 
         response = await retry_async(
             self._client.post,

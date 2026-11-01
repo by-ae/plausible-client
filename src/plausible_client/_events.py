@@ -34,6 +34,12 @@ ALWAYS_INTERACTIVE_EVENTS = frozenset(
 
 PropValue = str | int | float | bool
 
+# Plausible.Ingestion.Request stores scroll depth 0..100 and clamps anything
+# larger to 100. Engagement time is milliseconds. Values at or above
+# :timer.hours(30 * 24) are ignored. Erlang timer:hours/1 returns milliseconds.
+MAX_SCROLL_DEPTH = 100
+MAX_ENGAGEMENT_TIME_MS = 30 * 24 * 60 * 60 * 1000
+
 
 def validate_event(
     *,
@@ -42,6 +48,8 @@ def validate_event(
     url: str,
     interactive: bool | None,
     props: dict[str, PropValue] | None,
+    scroll_depth: int | None = None,
+    engagement_time: int | None = None,
 ) -> None:
     """Raise ValueError when the ingestion parser would reject the event."""
     if not isinstance(domain, str) or not domain.strip():
@@ -64,6 +72,76 @@ def validate_event(
         )
     if props:
         _validate_props(props)
+    engagement_fields(name=name, scroll_depth=scroll_depth, engagement_time=engagement_time)
+
+
+def engagement_fields(
+    *,
+    name: str,
+    scroll_depth: int | None,
+    engagement_time: int | None,
+) -> dict[str, int]:
+    """Return the ``sd`` and ``e`` fields for an engagement event.
+
+    The ingestion request only reads those keys when the event name is
+    ``engagement``. Both missing, or an engagement time of 0 with no scroll
+    depth, is the pair the server rejects with a 400.
+    """
+    if scroll_depth is None and engagement_time is None:
+        if name == "engagement":
+            raise ValueError(
+                "engagement events require scroll_depth from 0 to "
+                f"{MAX_SCROLL_DEPTH} or engagement_time from 1 to "
+                f"{MAX_ENGAGEMENT_TIME_MS - 1} milliseconds. "
+                "The Events API rejects the event when both are missing."
+            )
+        return {}
+
+    if name != "engagement":
+        raise ValueError(
+            "scroll_depth and engagement_time are only recorded for an "
+            "engagement event. The Events API ignores them on other names."
+        )
+
+    payload: dict[str, int] = {}
+    if scroll_depth is not None:
+        payload["sd"] = _require_scroll_depth(scroll_depth)
+    if engagement_time is not None:
+        payload["e"] = _require_engagement_time(engagement_time)
+
+    time_counts = payload.get("e", 0) > 0
+    if "sd" not in payload and not time_counts:
+        raise ValueError(
+            "engagement events require scroll_depth from 0 to "
+            f"{MAX_SCROLL_DEPTH} or engagement_time from 1 to "
+            f"{MAX_ENGAGEMENT_TIME_MS - 1} milliseconds. "
+            "An engagement_time of 0 does not count on its own."
+        )
+    return payload
+
+
+def _require_scroll_depth(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_SCROLL_DEPTH:
+        raise ValueError(
+            "scroll_depth must be an integer from 0 to "
+            f"{MAX_SCROLL_DEPTH}. The Events API stores a larger value as 100."
+        )
+    return value
+
+
+def _require_engagement_time(value: object) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value >= MAX_ENGAGEMENT_TIME_MS
+    ):
+        raise ValueError(
+            "engagement_time must be an integer from 0 to "
+            f"{MAX_ENGAGEMENT_TIME_MS - 1} milliseconds. "
+            "A larger value is ignored and stored as no time."
+        )
+    return value
 
 
 def _validate_props(props: dict[str, PropValue]) -> None:

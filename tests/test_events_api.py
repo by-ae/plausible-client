@@ -335,6 +335,105 @@ async def test_async_send_event_rejects_noninteractive_pageview() -> None:
 
 
 @respx.mock
+def test_send_engagement_event_sends_scroll_depth_and_time() -> None:
+    """engagement events carry sd and e, the fields the tracker sends."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = Client(api_key="test-key")
+    result = client.send_event(
+        domain="example.com",
+        name="engagement",
+        url="https://example.com/docs",
+        scroll_depth=0,
+        engagement_time=12_000,
+    )
+
+    assert result.dropped is False
+    body = json.loads(route.calls.last.request.content)
+    assert body["name"] == "engagement"
+    assert body["sd"] == 0
+    assert body["e"] == 12_000
+    assert "scroll_depth" not in body
+    assert "engagement_time" not in body
+
+
+def test_send_engagement_event_requires_a_value_the_api_keeps() -> None:
+    """The API returns 400 when scroll depth and engagement time are both missing."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="engagement"):
+        client.send_event(
+            domain="example.com",
+            name="engagement",
+            url="https://example.com/docs",
+        )
+
+    with pytest.raises(ValueError, match="engagement_time of 0"):
+        client.send_event(
+            domain="example.com",
+            name="engagement",
+            url="https://example.com/docs",
+            engagement_time=0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("scroll_depth", "engagement_time"),
+    [
+        (101, None),
+        (-1, None),
+        (True, None),
+        (None, 30 * 24 * 60 * 60 * 1000),
+        (None, -5),
+        (None, False),
+    ],
+)
+def test_send_engagement_event_rejects_values_the_api_will_not_store(
+    scroll_depth: object,
+    engagement_time: object,
+) -> None:
+    """Values above 100 are stored as 100, and a huge time is ignored."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError):
+        client.send_event(
+            domain="example.com",
+            name="engagement",
+            url="https://example.com/docs",
+            scroll_depth=scroll_depth,  # type: ignore[arg-type]
+            engagement_time=engagement_time,  # type: ignore[arg-type]
+        )
+
+
+def test_scroll_depth_is_rejected_on_other_events() -> None:
+    """The API only reads sd and e when the event name is engagement."""
+    client = Client(api_key="test-key")
+
+    with pytest.raises(ValueError, match="engagement"):
+        client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="https://example.com/docs",
+            scroll_depth=40,
+        )
+
+
+@pytest.mark.asyncio
+async def test_async_send_engagement_event_requires_scroll_or_time() -> None:
+    """The async client applies the same engagement checks."""
+    client = AsyncClient(api_key="test-key")
+    with pytest.raises(ValueError, match="engagement"):
+        await client.send_event(
+            domain="example.com",
+            name="engagement",
+            url="https://example.com/docs",
+        )
+    await client.close()
+
+
+@respx.mock
 @pytest.mark.parametrize(
     "revenue",
     [
