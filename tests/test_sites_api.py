@@ -353,6 +353,38 @@ def test_delete_custom_property() -> None:
 
 
 @respx.mock
+def test_sites_paths_keep_reserved_characters() -> None:
+    """?, # and a bare % must stay in the path, not become a query or fragment."""
+    props = respx.delete(url__regex=r"https://plausible.io/api/v1/sites/custom-props/").mock(
+        return_value=httpx.Response(200, json={"deleted": True})
+    )
+    guests = respx.delete(url__regex=r"https://plausible.io/api/v1/sites/guests/").mock(
+        return_value=httpx.Response(200, json={"deleted": True})
+    )
+    sites = respx.get(url__regex=r"https://plausible.io/api/v1/sites/").mock(
+        return_value=httpx.Response(200, json={"domain": "app?name", "timezone": "Etc/UTC"})
+    )
+
+    client = Client(api_key="test-key")
+
+    assert client.delete_custom_property("example.com", "a/b?c#d 100%") is True
+    assert client.delete_custom_property("example.com", "foo/bar") is True
+    assert client.delete_guest("example.com", "a?b+tag@example.com") is True
+    site = client.get_site("app?name")
+
+    assert props.calls[0].request.url.raw_path == (
+        b"/api/v1/sites/custom-props/a/b%3Fc%23d%20100%25"
+    )
+    assert props.calls[0].request.url.query == b""
+    assert props.calls[1].request.url.raw_path == b"/api/v1/sites/custom-props/foo/bar"
+    assert guests.calls.last.request.url.raw_path == (
+        b"/api/v1/sites/guests/a%3Fb+tag@example.com?site_id=example.com"
+    )
+    assert sites.calls.last.request.url.raw_path == b"/api/v1/sites/app%3Fname"
+    assert site.domain == "app?name"
+
+
+@respx.mock
 def test_list_guests() -> None:
     """Test listing guests for a site."""
     respx.get("https://plausible.io/api/v1/sites/guests").mock(

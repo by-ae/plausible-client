@@ -281,6 +281,22 @@ async def test_async_delete_custom_property() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_async_delete_custom_property_keeps_slashes_and_reserved_characters() -> None:
+    """The wildcard property route joins slashes. Other reserved characters stay encoded."""
+    route = respx.delete(url__regex=r"https://plausible.io/api/v1/sites/custom-props/").mock(
+        return_value=httpx.Response(200, json={"deleted": True})
+    )
+
+    async with AsyncClient(api_key="test-key") as client:
+        assert await client.delete_custom_property("example.com", "a/b?c#d 100%") is True
+
+    assert route.calls.last.request.url.raw_path == (
+        b"/api/v1/sites/custom-props/a/b%3Fc%23d%20100%25"
+    )
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_async_list_guests() -> None:
     """Test listing guests with async client."""
     respx.get("https://plausible.io/api/v1/sites/guests").mock(

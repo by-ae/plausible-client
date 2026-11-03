@@ -11,6 +11,7 @@ from plausible_client._events import (
     validate_event,
 )
 from plausible_client._pages import check_list_limit, check_page_size, collect_pages
+from plausible_client._paths import encode_path_segment, encode_property_path
 from plausible_client._responses import (
     debug_visitor_ip,
     event_was_dropped,
@@ -408,7 +409,7 @@ class Client:
         """
         response = retry_sync(
             self._client.get,
-            f"{self.base_url}/api/v1/sites/{site_id}",
+            f"{self.base_url}/api/v1/sites/{encode_path_segment(site_id)}",
         )
         data = self._handle_json_response(response)
         return Site.from_dict(data)
@@ -484,7 +485,7 @@ class Client:
 
         response = retry_sync(
             self._client.put,
-            f"{self.base_url}/api/v1/sites/{site_id}",
+            f"{self.base_url}/api/v1/sites/{encode_path_segment(site_id)}",
             json=payload,
         )
         data = self._handle_json_response(response)
@@ -506,7 +507,7 @@ class Client:
         """
         response = retry_sync(
             self._client.delete,
-            f"{self.base_url}/api/v1/sites/{site_id}",
+            f"{self.base_url}/api/v1/sites/{encode_path_segment(site_id)}",
         )
         data = self._handle_json_response(response)
         return was_deleted(data)
@@ -630,7 +631,7 @@ class Client:
         response = retry_sync(
             self._client.request,
             "DELETE",
-            f"{self.base_url}/api/v1/sites/goals/{goal_id}",
+            f"{self.base_url}/api/v1/sites/goals/{encode_path_segment(goal_id)}",
             json={"site_id": site_id},
         )
         data = self._handle_json_response(response)
@@ -722,7 +723,7 @@ class Client:
         response = retry_sync(
             self._client.request,
             "DELETE",
-            f"{self.base_url}/api/v1/sites/custom-props/{property_name}",
+            f"{self.base_url}/api/v1/sites/custom-props/{encode_property_path(property_name)}",
             data={"site_id": site_id},
         )
         data = self._handle_json_response(response)
@@ -822,7 +823,7 @@ class Client:
         """
         response = retry_sync(
             self._client.delete,
-            f"{self.base_url}/api/v1/sites/guests/{email}",
+            f"{self.base_url}/api/v1/sites/guests/{encode_path_segment(email)}",
             params={"site_id": site_id},
         )
         data = self._handle_json_response(response)
