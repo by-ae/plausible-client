@@ -1,6 +1,6 @@
 """Tests for the QueryBuilder."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -312,6 +312,30 @@ def test_query_builder_datetime_range() -> None:
         "2024-01-01T12:00:00+00:00",
         "2024-01-01T15:59:59+00:00",
     ]
+
+
+def test_date_range_end_before_start_is_rejected() -> None:
+    """The API swaps an inverted range and returns the reversed period."""
+    with pytest.raises(ValueError, match="before the start"):
+        QueryBuilder("example.com").date_range(date(2024, 2, 1), date(2024, 1, 1))
+
+    plus_two = timezone(timedelta(hours=2))
+    with pytest.raises(ValueError, match="before the start"):
+        QueryBuilder("example.com").date_range(
+            datetime(2024, 1, 1, 12, tzinfo=timezone.utc),
+            datetime(2024, 1, 1, 13, tzinfo=plus_two),
+        )
+
+
+def test_date_range_allows_equal_bounds() -> None:
+    """A single day is a valid range. Equal instants are not swapped."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 1))
+        .build()
+    )
+    assert payload["date_range"] == ["2024-01-01", "2024-01-01"]
 
 
 def test_naive_datetime_range_is_rejected() -> None:

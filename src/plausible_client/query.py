@@ -21,6 +21,13 @@ def _require_query_date_pair(start: date, end: date) -> None:
     if start_is_datetime:
         _require_aware_datetime(start)
         _require_aware_datetime(end)
+    # DateTimeRange.new! swaps the bounds when the end is not after the start,
+    # so an inverted range is queried as the opposite period with no error.
+    if start > end:
+        raise ValueError(
+            "date_range end is before the start. "
+            "The Stats API swaps the two and queries the reversed period."
+        )
 
 
 def _require_aware_datetime(value: date) -> None:
