@@ -136,6 +136,15 @@ client.send_event(
     engagement_time=12000,
 )
 
+# Hash-based routing. The page path includes the URL fragment only when
+# hashMode is 1. Without it, this URL is stored as /app.
+client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/app#/dashboard",
+    hash_mode=True,
+)
+
 # A non-interactive event is excluded from bounce-rate calculations.
 # This applies to custom events. pageview and other system events stay
 # interactive, and interactive=False is rejected for those names.

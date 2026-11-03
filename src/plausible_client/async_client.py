@@ -6,6 +6,7 @@ import httpx
 
 from plausible_client._events import (
     engagement_fields,
+    hash_mode_field,
     props_discarded,
     revenue_discarded,
     validate_event,
@@ -163,6 +164,7 @@ class AsyncClient:
         debug: bool = False,
         scroll_depth: int | None = None,
         engagement_time: int | None = None,
+        hash_mode: bool | None = None,
     ) -> EventResult:
         """
         Send a custom event or pageview to Plausible.
@@ -205,6 +207,10 @@ class AsyncClient:
             engagement_time: Engaged time in milliseconds for an
                 ``engagement`` event, sent as ``e``. 0 does not count on
                 its own. A value of 30 days or more is ignored by the API.
+            hash_mode: When true, send ``hashMode`` 1 so the page path
+                includes the URL fragment. The ingestion request drops the
+                fragment otherwise, so ``https://example.com/app#/dashboard``
+                is stored as ``/app``.
 
         Returns:
             EventResult. ``dropped`` is true when the response includes a
@@ -268,6 +274,7 @@ class AsyncClient:
                 engagement_time=engagement_time,
             )
         )
+        payload.update(hash_mode_field(hash_mode))
 
         response = await retry_async(
             self._client.post,

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `send_event(hash_mode=True)` sends `hashMode: 1`. The Events API then keeps the URL fragment in the page path. Without it, `https://example.com/app#/dashboard` is stored as `/app`. A boolean is not accepted on the wire, so true is sent as the integer 1
 - `send_event(scroll_depth=..., engagement_time=...)` sends the `sd` and `e` fields of an `engagement` event. The Events API rejects that name when both are missing, stores scroll depth above 100 as 100, and ignores an engagement time of 30 days or more. Other event names ignore the fields, so those arguments are rejected
 - `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud returns HTTP 200 with the IP it will use for visitor counting and does not record the event. `EventResult.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset
 - `list_all_sites()`, `list_all_goals()`, `list_all_guests()`, and `list_all_teams()` follow the Sites API `after` cursor until it is null. Page size must be from 1 to 100, because a larger `limit` is ignored
