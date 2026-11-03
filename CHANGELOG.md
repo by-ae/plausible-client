@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `has_done()` and `has_not_done()` accept `and`, `or`, and `not` of event filters. The query schema allows that tree, and only a nested behavioral filter or a non-event dimension is rejected. A single event filter is unchanged
 - Sites API path parameters encode `?`, `#`, and a bare `%`. Those characters were parsed as a query string, a fragment, or an invalid escape, so the request addressed a different site, guest, goal, or custom property. Slashes in a custom property name stay in the path, because that route joins the wildcard segments back into the name. `@` and `+` in an email are left as written
 - `send_event()` sets `EventResult.props_discarded` when a property is blank, nested, or past the 30 the Events API stores. `404`, `Form: Submission`, and `WP Form Completions` count the `path` property the API adds toward that limit. A non-finite value, null, or non-string key is rejected before the request
 - `case_sensitive` is accepted on `is_not` and `contains_not`. The public query schema allows that modifier on those operators, and the stats SQL applies it. It stays rejected for pattern operators and for `visit:city` and `segment`, whose clauses are integers
