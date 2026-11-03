@@ -47,6 +47,25 @@ MAX_SCROLL_DEPTH = 100
 MAX_ENGAGEMENT_TIME_MS = 30 * 24 * 60 * 60 * 1000
 
 
+def hash_mode_field(hash_mode: bool | None) -> dict[str, int]:
+    """Return ``hashMode`` when the page path should include the URL fragment.
+
+    The ingestion request appends the fragment only when this value is the
+    integer 1. A JSON boolean does not cast to that integer, so true is sent
+    as 1. Omitting the field leaves the path without the fragment.
+    """
+    if hash_mode is None:
+        return {}
+    if not isinstance(hash_mode, bool):
+        raise ValueError(
+            "hash_mode must be true or false. True sends hashMode 1, which keeps "
+            "the URL fragment in the page path."
+        )
+    if hash_mode:
+        return {"hashMode": 1}
+    return {}
+
+
 def validate_event(
     *,
     domain: str,

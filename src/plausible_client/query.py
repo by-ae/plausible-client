@@ -21,6 +21,13 @@ def _require_query_date_pair(start: date, end: date) -> None:
     if start_is_datetime:
         _require_aware_datetime(start)
         _require_aware_datetime(end)
+    # DateTimeRange.new! swaps the bounds when the end is not after the start,
+    # so an inverted range is queried as the opposite period with no error.
+    if start > end:
+        raise ValueError(
+            "date_range end is before the start. "
+            "The Stats API swaps the two and queries the reversed period."
+        )
 
 
 def _require_aware_datetime(value: date) -> None:
@@ -345,13 +352,21 @@ def negate(expression: list[Any]) -> list[Any]:
 
 
 def has_done(expression: list[Any]) -> list[Any]:
-    """Keep sessions in which the event filter also matched."""
+    """Keep sessions in which the event filter also matched.
+
+    The inner value may be one event filter, or ``and``, ``or``, or ``not``
+    combining event filters. Behavioral filters cannot be nested.
+    """
     _require_event_filter(expression)
     return ["has_done", expression]
 
 
 def has_not_done(expression: list[Any]) -> list[Any]:
-    """Drop sessions in which the event filter matched."""
+    """Drop sessions in which the event filter matched.
+
+    The inner value may be one event filter, or ``and``, ``or``, or ``not``
+    combining event filters. Behavioral filters cannot be nested.
+    """
     _require_event_filter(expression)
     return ["has_not_done", expression]
 
@@ -408,8 +423,34 @@ def _require_filter_expression(expression: list[Any]) -> None:
 
 def _require_event_filter(expression: list[Any]) -> None:
     _require_filter_expression(expression)
-    if expression[0] in ("has_done", "has_not_done"):
+    _require_event_tree(expression)
+
+
+def _require_event_tree(expression: list[Any]) -> None:
+    """Match Filters.traverse, which checks leaves inside a behavioral filter.
+
+    ``and``, ``or``, and ``not`` are walked. A nested ``has_done`` or
+    ``has_not_done`` is rejected. Every leaf dimension has to start with
+    ``event:``.
+    """
+    operator = expression[0]
+    if operator in ("has_done", "has_not_done"):
         raise ValueError("Behavioral filters (has_done, has_not_done) cannot be nested.")
+    if operator in ("and", "or"):
+        children = expression[1] if len(expression) > 1 else None
+        if not isinstance(children, list) or not children:
+            raise ValueError("has_done and has_not_done only accept an event dimension filter")
+        for child in children:
+            _require_filter_expression(child)
+            _require_event_tree(child)
+        return
+    if operator == "not":
+        inner = expression[1] if len(expression) > 1 else None
+        if not isinstance(inner, list):
+            raise TypeError("expected a Stats API filter expression")
+        _require_filter_expression(inner)
+        _require_event_tree(inner)
+        return
     dimension = expression[1] if len(expression) > 1 else None
     if not isinstance(dimension, str) or not dimension.startswith("event:"):
         raise ValueError("has_done and has_not_done only accept an event dimension filter")

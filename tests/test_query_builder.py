@@ -1,6 +1,6 @@
 """Tests for the QueryBuilder."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -314,6 +314,30 @@ def test_query_builder_datetime_range() -> None:
     ]
 
 
+def test_date_range_end_before_start_is_rejected() -> None:
+    """The API swaps an inverted range and returns the reversed period."""
+    with pytest.raises(ValueError, match="before the start"):
+        QueryBuilder("example.com").date_range(date(2024, 2, 1), date(2024, 1, 1))
+
+    plus_two = timezone(timedelta(hours=2))
+    with pytest.raises(ValueError, match="before the start"):
+        QueryBuilder("example.com").date_range(
+            datetime(2024, 1, 1, 12, tzinfo=timezone.utc),
+            datetime(2024, 1, 1, 13, tzinfo=plus_two),
+        )
+
+
+def test_date_range_allows_equal_bounds() -> None:
+    """A single day is a valid range. Equal instants are not swapped."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range(date(2024, 1, 1), date(2024, 1, 1))
+        .build()
+    )
+    assert payload["date_range"] == ["2024-01-01", "2024-01-01"]
+
+
 def test_naive_datetime_range_is_rejected() -> None:
     """DateTime.from_iso8601 rejects timestamps that have no offset."""
     with pytest.raises(ValueError, match="timezone-aware"):
@@ -463,6 +487,66 @@ def test_behavioral_filters_reject_visit_dimensions_and_nesting() -> None:
     inner = has_done(filter_clause(Dimension.EVENT_PAGE, "is", "/pricing"))
     with pytest.raises(ValueError, match="cannot be nested"):
         has_not_done(inner)
+
+
+def test_behavioral_filter_accepts_a_compound_event_filter() -> None:
+    """has_done may wrap and, or, or not when every leaf is an event dimension."""
+    payload = (
+        QueryBuilder("example.com")
+        .metrics(Metric.VISITORS)
+        .date_range("7d")
+        .where(
+            has_done(
+                all_of(
+                    filter_clause(Dimension.EVENT_PAGE, "is", "/pricing"),
+                    filter_clause(Dimension.EVENT_NAME, "is", "Signup"),
+                )
+            ),
+            has_not_done(
+                any_of(
+                    filter_clause(Dimension.EVENT_PAGE, "is", "/login"),
+                    negate(filter_clause(Dimension.event_property("plan"), "is", "free")),
+                )
+            ),
+        )
+        .build()
+    )
+
+    assert payload["filters"] == [
+        [
+            "has_done",
+            [
+                "and",
+                [
+                    ["is", "event:page", ["/pricing"]],
+                    ["is", "event:name", ["Signup"]],
+                ],
+            ],
+        ],
+        [
+            "has_not_done",
+            [
+                "or",
+                [
+                    ["is", "event:page", ["/login"]],
+                    ["not", ["is", "event:props:plan", ["free"]]],
+                ],
+            ],
+        ],
+    ]
+
+
+def test_behavioral_filter_rejects_a_visit_dimension_inside_and() -> None:
+    """A visit dimension is still refused when it is nested under and or not."""
+    with pytest.raises(ValueError, match="event dimension"):
+        has_done(
+            all_of(
+                filter_clause(Dimension.EVENT_PAGE, "is", "/"),
+                filter_clause(Dimension.VISIT_SOURCE, "is", "Google"),
+            )
+        )
+    with pytest.raises(ValueError, match="event dimension"):
+        has_not_done(negate(filter_clause(Dimension.VISIT_BROWSER, "is", "Chrome")))
 
 
 def test_logical_filters_require_two_clauses() -> None:

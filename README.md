@@ -136,6 +136,15 @@ client.send_event(
     engagement_time=12000,
 )
 
+# Hash-based routing. The page path includes the URL fragment only when
+# hashMode is 1. Without it, this URL is stored as /app.
+client.send_event(
+    domain="example.com",
+    name="pageview",
+    url="https://example.com/app#/dashboard",
+    hash_mode=True,
+)
+
 # A non-interactive event is excluded from bounce-rate calculations.
 # This applies to custom events. pageview and other system events stay
 # interactive, and interactive=False is rejected for those names.
@@ -271,9 +280,9 @@ query = (
 )
 ```
 
-`date_range` and `metrics` are required by the Stats API. `build()` rejects a query that omits either. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A relative range is also accepted: `"14d"` means the last 1 to 5000 days, and `"3mo"` means the last 1 to 100 months. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes.
+`date_range` and `metrics` are required by the Stats API. `build()` rejects a query that omits either. Presets are `"day"`, `"24h"`, `"7d"`, `"28d"`, `"30d"`, `"91d"`, `"month"`, `"6mo"`, `"12mo"`, `"year"`, and `"all"`. A relative range is also accepted: `"14d"` means the last 1 to 5000 days, and `"3mo"` means the last 1 to 100 months. A custom range is two dates or two timezone-aware datetimes. Naive datetimes are rejected, because a timestamp without an offset is not a valid Stats API range. The start and end must both be dates or both be datetimes. The end must not be before the start: the API swaps those bounds and queries the reversed period. Equal bounds are a single day or a single instant.
 
-Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred, and they only accept an `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`).
+Top-level filters are combined with an implicit `and`. `where()` adds `or`, explicit `and`, `not`, and the behavioral filters `has_done` and `has_not_done`. Behavioral filters select sessions by whether another event occurred. The inner filter can be one `event:` dimension (including `Dimension.event_property("author")`, which is `event:props:author`) or `and`, `or`, and `not` combining those. A behavioral filter cannot contain another behavioral filter.
 
 `event:goal` filters only accept `is` and `contains`. `segment` filters only accept `is`. Time dimensions are rejected in filters; set `date_range` for those. `order_by` cannot use `event:goal` or `segment`, and each entry has to be one of the query's metrics or dimensions. `limit` must be from 1 to 10000 and `offset` must be zero or greater. Metrics and dimensions must be unique. `include.time_labels` requires a time dimension.
 

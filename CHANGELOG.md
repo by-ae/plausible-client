@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `send_event(hash_mode=True)` sends `hashMode: 1`. The Events API then keeps the URL fragment in the page path. Without it, `https://example.com/app#/dashboard` is stored as `/app`. A boolean is not accepted on the wire, so true is sent as the integer 1
 - `send_event(scroll_depth=..., engagement_time=...)` sends the `sd` and `e` fields of an `engagement` event. The Events API rejects that name when both are missing, stores scroll depth above 100 as 100, and ignores an engagement time of 30 days or more. Other event names ignore the fields, so those arguments are rejected
 - `send_event(debug=True)` sets `X-Debug-Request: true`. Plausible Cloud returns HTTP 200 with the IP it will use for visitor counting and does not record the event. `EventResult.ip` is that address. A server that ignores the header still records the event, returns HTTP 202, and leaves `ip` unset
 - `list_all_sites()`, `list_all_goals()`, `list_all_guests()`, and `list_all_teams()` follow the Sites API `after` cursor until it is null. Page size must be from 1 to 100, because a larger `limit` is ignored
@@ -51,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `QueryBuilder.date_range()` rejects a range whose end is before its start. The Stats API swaps those bounds and queries the reversed period. Equal dates or equal timestamps are still accepted
+- `has_done()` and `has_not_done()` accept `and`, `or`, and `not` of event filters. The query schema allows that tree, and only a nested behavioral filter or a non-event dimension is rejected. A single event filter is unchanged
+- Sites API path parameters encode `?`, `#`, and a bare `%`. Those characters were parsed as a query string, a fragment, or an invalid escape, so the request addressed a different site, guest, goal, or custom property. Slashes in a custom property name stay in the path, because that route joins the wildcard segments back into the name. `@` and `+` in an email are left as written
 - `send_event()` sets `EventResult.props_discarded` when a property is blank, nested, or past the 30 the Events API stores. `404`, `Form: Submission`, and `WP Form Completions` count the `path` property the API adds toward that limit. A non-finite value, null, or non-string key is rejected before the request
 - `case_sensitive` is accepted on `is_not` and `contains_not`. The public query schema allows that modifier on those operators, and the stats SQL applies it. It stays rejected for pattern operators and for `visit:city` and `segment`, whose clauses are integers
 - `query_all()` keeps response `meta` when a page has no rows. `time_labels`, import info, and `metric_warnings` were dropped for an empty result

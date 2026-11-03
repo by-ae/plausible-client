@@ -189,6 +189,64 @@ def test_send_event_omits_unset_optional_fields() -> None:
     body = json.loads(route.calls.last.request.content)
     assert "referrer" not in body
     assert "interactive" not in body
+    assert "hashMode" not in body
+
+
+@respx.mock
+def test_send_event_hash_mode_keeps_the_url_fragment() -> None:
+    """hashMode 1 is the integer the ingestion request uses to keep the fragment."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = Client(api_key="test-key")
+    client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/app#/dashboard",
+        hash_mode=True,
+    )
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["url"] == "https://example.com/app#/dashboard"
+    assert body["hashMode"] == 1
+
+    client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/app#/dashboard",
+        hash_mode=False,
+    )
+    body = json.loads(route.calls.last.request.content)
+    assert "hashMode" not in body
+
+    with pytest.raises(ValueError, match="hash_mode"):
+        client.send_event(
+            domain="example.com",
+            name="pageview",
+            url="https://example.com/app",
+            hash_mode=1,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_send_event_hash_mode() -> None:
+    """The async client sends the same hashMode flag."""
+    route = respx.post("https://plausible.io/api/event").mock(
+        return_value=httpx.Response(202, text="ok")
+    )
+
+    client = AsyncClient(api_key="test-key")
+    await client.send_event(
+        domain="example.com",
+        name="pageview",
+        url="https://example.com/app#/dashboard",
+        hash_mode=True,
+    )
+    body = json.loads(route.calls.last.request.content)
+    assert body["hashMode"] == 1
+    await client.close()
 
 
 @respx.mock
